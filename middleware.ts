@@ -75,19 +75,15 @@ export async function middleware(request: NextRequest) {
       });
     }
 
-    const isWhatsAppWebhook = pathname === "/api/whatsapp/webhook";
+    const limitResult = rateLimit(ip, GENERAL_RATE_LIMIT, "api");
 
-    if (!isWhatsAppWebhook) {
-      const limitResult = rateLimit(ip, GENERAL_RATE_LIMIT, "api");
-
-      if (!limitResult.success) {
-        const response = NextResponse.json(
-          { error: "Too many requests. Please try again later." },
-          { status: 429 }
-        );
-        applyRateLimitHeaders(response.headers, limitResult);
-        return withSecurityHeaders(response);
-      }
+    if (!limitResult.success) {
+      const response = NextResponse.json(
+        { error: "Too many requests. Please try again later." },
+        { status: 429 }
+      );
+      applyRateLimitHeaders(response.headers, limitResult);
+      return withSecurityHeaders(response);
     }
   }
 

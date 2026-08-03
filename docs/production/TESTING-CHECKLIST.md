@@ -101,7 +101,8 @@ Start with smoke test (50 VUs), then ramp to 1000 VUs on staging only.
 
 - [ ] Sign up with email
 - [ ] Sign in with Google
-- [ ] Sign in with phone OTP
+- [ ] Sign in with email and password
+- [ ] Sign in with Google OAuth
 - [ ] Browse shop → select size → add to cart
 - [ ] Checkout → Razorpay test payment → order in account
 - [ ] Admin dashboard (allowlisted user only)

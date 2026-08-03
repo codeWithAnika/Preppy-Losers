@@ -4,6 +4,7 @@ import "./globals.css";
 import { RootChrome } from "@/components/layout/RootChrome";
 import { GoogleAnalytics } from "@/components/analytics/GoogleAnalytics";
 import { doctorGlitch } from "@/lib/fonts";
+import { getSiteUrl } from "@/lib/env/public";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -19,9 +20,27 @@ const anton = Anton({
 });
 
 export const metadata: Metadata = {
-  title: "Preppy Losers — Underground Street Culture",
+  metadataBase: new URL(getSiteUrl()),
+  title: {
+    default: "Preppy Losers — Underground Street Culture",
+    template: "%s | Preppy Losers",
+  },
   description:
     "Underground street culture for the bold. Premium streetwear drops from Preppy Losers.",
+  openGraph: {
+    type: "website",
+    locale: "en_IN",
+    siteName: "Preppy Losers",
+    title: "Preppy Losers — Underground Street Culture",
+    description:
+      "Underground street culture for the bold. Premium streetwear drops from Preppy Losers.",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Preppy Losers — Underground Street Culture",
+    description:
+      "Underground street culture for the bold. Premium streetwear drops from Preppy Losers.",
+  },
 };
 
 export default function RootLayout({

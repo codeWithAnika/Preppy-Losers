@@ -29,6 +29,7 @@ export const useCartStore = create<CartState>()(
       addItem: (item) => {
         const quantity = item.quantity ?? 1;
         const key = getCartItemKey(item.productId, item.size);
+        const maxStock = item.maxStock ?? quantity;
 
         set((state) => {
           const existing = state.items.find(
@@ -36,10 +37,14 @@ export const useCartStore = create<CartState>()(
           );
 
           if (existing) {
+            const nextQuantity = Math.min(
+              existing.quantity + quantity,
+              existing.maxStock
+            );
             return {
               items: state.items.map((entry) =>
                 getCartItemKey(entry.productId, entry.size) === key
-                  ? { ...entry, quantity: entry.quantity + quantity }
+                  ? { ...entry, quantity: nextQuantity, maxStock: item.maxStock ?? entry.maxStock }
                   : entry
               ),
             };
@@ -54,7 +59,8 @@ export const useCartStore = create<CartState>()(
                 productImage: item.productImage,
                 price: item.price,
                 size: item.size,
-                quantity,
+                quantity: Math.min(quantity, maxStock),
+                maxStock,
               },
             ],
           };
@@ -70,11 +76,16 @@ export const useCartStore = create<CartState>()(
         }
 
         set((state) => ({
-          items: state.items.map((entry) =>
-            getCartItemKey(entry.productId, entry.size) === key
-              ? { ...entry, quantity }
-              : entry
-          ),
+          items: state.items.map((entry) => {
+            if (getCartItemKey(entry.productId, entry.size) !== key) {
+              return entry;
+            }
+
+            return {
+              ...entry,
+              quantity: Math.min(quantity, entry.maxStock || quantity),
+            };
+          }),
         }));
       },
 

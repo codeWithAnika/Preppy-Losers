@@ -5,6 +5,7 @@ export type CartItem = {
   price: number;
   size: string;
   quantity: number;
+  maxStock: number;
 };
 
 export type ShippingAddress = {

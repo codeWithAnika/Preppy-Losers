@@ -1,4 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
+import {
+  isProfileComplete,
+  PROFILE_COMPLETION_PATH,
+} from "@/lib/auth/profile-completion";
 import { resolvePostAuthPath } from "@/lib/auth/post-auth-redirect";
 import { resolveAuthRedirectOrigin } from "@/lib/auth/oauth-redirect";
 import { sendWelcomeEmail } from "@/lib/email/notifications";
@@ -48,10 +52,9 @@ export async function GET(request: NextRequest) {
     return buildLoginErrorRedirect(origin);
   }
 
-  const redirectResponse = NextResponse.redirect(`${origin}${next}`);
-
   try {
-    const supabase = createRouteHandlerClient(request, redirectResponse);
+    const cookieResponse = NextResponse.next();
+    const supabase = createRouteHandlerClient(request, cookieResponse);
     const { error } = await supabase.auth.exchangeCodeForSession(code);
 
     if (error) {
@@ -64,6 +67,25 @@ export async function GET(request: NextRequest) {
     const {
       data: { user },
     } = await supabase.auth.getUser();
+
+    let destination = next;
+
+    if (user) {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("full_name")
+        .eq("id", user.id)
+        .maybeSingle();
+
+      if (!isProfileComplete(profile)) {
+        destination = `${PROFILE_COMPLETION_PATH}?next=${encodeURIComponent(next)}`;
+      }
+    }
+
+    const redirectResponse = NextResponse.redirect(`${origin}${destination}`);
+    cookieResponse.cookies.getAll().forEach((cookie) => {
+      redirectResponse.cookies.set(cookie);
+    });
 
     if (user?.email && isNewlyCreatedUser(user.created_at)) {
       const fullName =

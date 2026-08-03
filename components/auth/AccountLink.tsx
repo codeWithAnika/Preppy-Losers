@@ -45,13 +45,6 @@ export function AccountLink({ size = 20, className = "" }: AccountLinkProps) {
         .eq("id", user.id)
         .maybeSingle();
 
-      if (process.env.NODE_ENV === "development") {
-        console.log("[admin] AccountLink profile", {
-          userId: user.id,
-          profileRole: profile?.role ?? null,
-        });
-      }
-
       setHref(isAdmin(user.id, profile?.role) ? "/admin/dashboard" : "/account");
     };
 

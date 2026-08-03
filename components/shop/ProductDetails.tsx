@@ -57,6 +57,7 @@ export function ProductDetails({
       price: product.price,
       size: selectedSize,
       quantity,
+      maxStock: selectedStock,
     });
     openCart();
   };

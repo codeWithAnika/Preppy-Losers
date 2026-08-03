@@ -20,12 +20,10 @@ import {
 import { loadRazorpayScript, type RazorpaySuccessResponse } from "@/lib/razorpay";
 import {
   buildRazorpayCheckoutOptions,
-  logCheckoutDebug,
   RazorpayCheckoutValidationError,
   validateCreateOrderResponse,
   warnIfEnvKeyMismatch,
 } from "@/lib/razorpay-checkout";
-import { requestWhatsAppNotification } from "@/lib/whatsapp/notify-client";
 import { requestEmailNotification } from "@/lib/email/notify-client";
 
 interface CheckoutFormProps {
@@ -174,8 +172,6 @@ export function CheckoutForm({
         process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID
       );
 
-      logCheckoutDebug(checkoutParams);
-
       setLoading(false);
       modalOpened = true;
 
@@ -216,19 +212,6 @@ export function CheckoutForm({
           }
 
           if (!verifyData.duplicate) {
-            const productSummary = items
-              .map((item) => `${item.productName} (${item.size}) x${item.quantity}`)
-              .join(", ");
-
-            void requestWhatsAppNotification({
-              type: "order_confirmation",
-              phone: address.phone,
-              customerName: userName,
-              orderId: response.razorpay_order_id,
-              amountInr: checkoutParams.amountRupee,
-              productSummary,
-            });
-
             void requestEmailNotification({
               type: "order_confirmation",
               orderId: response.razorpay_order_id,
@@ -263,13 +246,6 @@ export function CheckoutForm({
             payInFlightRef.current = false;
           },
         },
-      });
-
-      console.log("[checkout] Razorpay options before open", {
-        keyPrefix: `${checkoutParams.keyId.slice(0, 15)}...`,
-        order_id: razorpayOptions.order_id,
-        amount: razorpayOptions.amount,
-        currency: razorpayOptions.currency,
       });
 
       const rzp = new window.Razorpay(razorpayOptions);

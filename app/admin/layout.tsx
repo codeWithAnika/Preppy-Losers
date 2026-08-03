@@ -17,11 +17,7 @@ export default async function AdminRootLayout({
 }) {
   const { user, profile } = await requireAdmin("/admin");
 
-  const adminEmail =
-    user.email?.trim() ||
-    profile.phone?.trim() ||
-    user.phone?.trim() ||
-    "";
+  const adminEmail = user.email?.trim() || "";
 
   return (
     <AdminProviders>

@@ -47,7 +47,7 @@ export default function PrivacyPolicyPage() {
         </p>
         <ul>
           <li>
-            Personal details such as your name, email address, and phone number
+            Personal details such as your name and email address
           </li>
           <li>Shipping and billing addresses you provide at checkout</li>
           <li>
@@ -76,9 +76,9 @@ export default function PrivacyPolicyPage() {
       <LegalSection id="account-information" title="Account Information">
         <p>
           When you create an account with {BRAND_NAME}, we collect the
-          information you provide during registration. This may include your
-          name, email address, and phone number if you choose phone-based
-          sign-in.
+          information you provide during registration — your name and email
+          address. If you sign in with Google, we receive your name and email
+          from your Google profile.
         </p>
         <p>
           Your account lets you view order history, track purchases, and manage

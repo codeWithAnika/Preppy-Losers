@@ -8,6 +8,7 @@ import {
   getUserOrders,
 } from "@/lib/orders.server";
 import { SignOutButton } from "@/components/auth/SignOutButton";
+import { ProfileEditForm } from "@/components/account/ProfileEditForm";
 import { PageEntrance } from "@/components/layout/PageEntrance";
 import { isAdmin } from "@/lib/auth/admin-allowlist";
 
@@ -51,14 +52,6 @@ export default async function AccountPage({ searchParams }: AccountPageProps) {
   const orderSuccess = searchParams?.order === "success";
   const adminDenied = searchParams?.admin_denied === "1";
   const isAdminUser = isAdmin(user.id, profile?.role);
-
-  if (process.env.NODE_ENV === "development") {
-    console.log("[admin] account page session", {
-      userId: user.id,
-      profileRole: profile?.role ?? null,
-      isAdmin: isAdminUser,
-    });
-  }
 
   return (
     <div className="min-h-screen px-4 pb-20 pt-24 md:px-8">
@@ -134,14 +127,6 @@ export default async function AccountPage({ searchParams }: AccountPageProps) {
             </div>
             <div>
               <dt className="mb-1 text-xs uppercase tracking-[0.2em] text-muted">
-                Phone
-              </dt>
-              <dd className="text-foreground">
-                {profile?.phone || user.phone || "—"}
-              </dd>
-            </div>
-            <div>
-              <dt className="mb-1 text-xs uppercase tracking-[0.2em] text-muted">
                 Member since
               </dt>
               <dd className="text-foreground">
@@ -155,6 +140,8 @@ export default async function AccountPage({ searchParams }: AccountPageProps) {
           <div className="mt-8">
             <SignOutButton />
           </div>
+
+          <ProfileEditForm initialName={profile?.full_name ?? ""} />
         </section>
 
         <section
@@ -177,7 +164,7 @@ export default async function AccountPage({ searchParams }: AccountPageProps) {
                   <div className="flex items-start justify-between gap-4">
                     <div>
                       <p className="text-sm uppercase tracking-wide text-foreground">
-                        {order.product_id}
+                        {order.product_name}
                       </p>
                       <p className="mt-1 text-xs text-muted">
                         Size {order.size} × {order.quantity} ·{" "}

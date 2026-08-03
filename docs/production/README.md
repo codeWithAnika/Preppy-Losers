@@ -33,7 +33,6 @@ Operational checklist for launching **preppylosers.com**. Code-level hardening i
 - [Rollback procedure](./ROLLBACK.md)
 - [Google OAuth (Supabase Auth)](./SUPABASE-GOOGLE-OAUTH.md)
 - [Resend email](./RESEND-EMAIL.md)
-- [WhatsApp](./WHATSAPP.md)
 
 ## Quick start (Vercel — recommended)
 

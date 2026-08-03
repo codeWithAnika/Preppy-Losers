@@ -126,6 +126,7 @@ export function CartDrawer() {
                         </span>
                         <button
                           type="button"
+                          disabled={item.quantity >= (item.maxStock || item.quantity)}
                           onClick={() =>
                             updateQuantity(
                               item.productId,
@@ -133,7 +134,7 @@ export function CartDrawer() {
                               item.quantity + 1
                             )
                           }
-                          className="inline-flex min-h-11 min-w-11 items-center justify-center text-foreground/70 hover:text-foreground"
+                          className="inline-flex min-h-11 min-w-11 items-center justify-center text-foreground/70 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
                           aria-label="Increase quantity"
                         >
                           <Plus size={14} />

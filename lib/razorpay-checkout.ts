@@ -83,6 +83,7 @@ export function warnIfEnvKeyMismatch(
   serverKeyId: string,
   envKeyId: string | undefined
 ): void {
+  if (process.env.NODE_ENV !== "development") return;
   if (!envKeyId || serverKeyId === envKeyId) {
     return;
   }
@@ -121,13 +122,4 @@ export function buildRazorpayCheckoutOptions(
     handler: extras.handler,
     modal: extras.modal,
   };
-}
-
-export function logCheckoutDebug(params: ValidatedCheckoutParams): void {
-  console.log("[checkout] Razorpay checkout payload", {
-    keyPrefix: params.keyId.slice(0, 15),
-    order_id: params.orderId,
-    amount: params.amountPaise,
-    currency: params.currency,
-  });
 }

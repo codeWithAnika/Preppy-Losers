@@ -39,11 +39,17 @@ export function EmailAuthForm({
       const supabase = createClient();
 
       if (mode === "signup") {
+        const trimmedName = fullName.trim();
+        if (trimmedName.length < 2) {
+          setError("Please enter your full name.");
+          return;
+        }
+
         const { data, error: signUpError } = await supabase.auth.signUp({
           email,
           password,
           options: {
-            data: { full_name: fullName.trim() },
+            data: { full_name: trimmedName },
           },
         });
 
@@ -97,6 +103,7 @@ export function EmailAuthForm({
           label="Full name"
           type="text"
           autoComplete="name"
+          required
           value={fullName}
           onChange={(e) => setFullName(e.target.value)}
           placeholder="Your name"
@@ -123,6 +130,17 @@ export function EmailAuthForm({
         onChange={(e) => setPassword(e.target.value)}
         placeholder="••••••••"
       />
+
+      {mode === "login" && (
+        <p className="text-right text-xs">
+          <Link
+            href="/login/forgot-password"
+            className="text-muted transition-colors hover:text-foreground"
+          >
+            Forgot password?
+          </Link>
+        </p>
+      )}
 
       {error && (
         <p className="text-xs text-accent" role="alert">
