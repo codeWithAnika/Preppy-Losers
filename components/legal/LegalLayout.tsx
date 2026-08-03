@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import { Footer } from "@/components/Footer";
 import { PageEntrance } from "@/components/layout/PageEntrance";
 import { TransitionLink } from "@/components/TransitionLink";
 import {
@@ -84,7 +83,6 @@ export function LegalLayout({
           </div>
         </PageEntrance>
       </div>
-      <Footer />
     </>
   );
 }

@@ -3,7 +3,6 @@
 import { useRef, useEffect } from "react";
 import { gsap, registerGSAP } from "@/lib/animations/gsap";
 import { DistressedHeadline } from "@/components/ui/DistressedHeadline";
-import { Footer } from "@/components/Footer";
 import { FounderCards } from "@/components/team/FounderCards";
 import { TeamSwipeCards } from "@/components/team/TeamSwipeCards";
 import {
@@ -128,8 +127,6 @@ export function TeamSection() {
           </div>
         </div>
       </div>
-
-      <Footer />
     </section>
   );
 }

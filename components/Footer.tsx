@@ -2,7 +2,8 @@ import { Instagram } from "lucide-react";
 import { BrandWordmark } from "@/components/BrandWordmark";
 import { AuthReturnLink } from "@/components/auth/AuthReturnLink";
 import { TransitionLink } from "@/components/TransitionLink";
-import { CONTACT_EMAIL, FOOTER_NAV_LINKS, SOCIAL_LINKS } from "@/types";
+import { SUPPORT_EMAIL } from "@/lib/legal/constants";
+import { FOOTER_NAV_LINKS, SOCIAL_LINKS } from "@/types";
 
 function ThreadsIcon({ size = 20 }: { size?: number }) {
   return (
@@ -53,10 +54,10 @@ export function Footer() {
         </div>
 
         <a
-          href={`mailto:${CONTACT_EMAIL}`}
+          href={`mailto:${SUPPORT_EMAIL}`}
           className="mb-10 block text-sm text-white/70 transition-colors hover:text-white"
         >
-          {CONTACT_EMAIL}
+          {SUPPORT_EMAIL}
         </a>
 
         <div className="flex flex-wrap gap-6 border-t border-white/15 pt-8">

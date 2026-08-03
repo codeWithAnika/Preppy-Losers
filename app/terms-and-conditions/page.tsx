@@ -3,8 +3,7 @@ import { LegalLayout } from "@/components/legal/LegalLayout";
 import { LegalSection } from "@/components/legal/LegalSection";
 import {
   BRAND_NAME,
-  BUSINESS_ADDRESS,
-  GST_NUMBER,
+  LEGAL_CONTACT_PARAGRAPH,
   SUPPORT_EMAIL,
 } from "@/lib/legal/constants";
 
@@ -236,18 +235,7 @@ export default function TermsAndConditionsPage() {
           Email:{" "}
           <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>
         </p>
-        {!BUSINESS_ADDRESS && (
-          <p>
-            {/* TODO: Add registered business address before launch */}
-            Registered business address: [To be added before launch]
-          </p>
-        )}
-        {!GST_NUMBER && (
-          <p>
-            {/* TODO: Add GSTIN if applicable before launch */}
-            GSTIN: [To be added before launch, if applicable]
-          </p>
-        )}
+        <p>{LEGAL_CONTACT_PARAGRAPH}</p>
       </LegalSection>
     </LegalLayout>
   );

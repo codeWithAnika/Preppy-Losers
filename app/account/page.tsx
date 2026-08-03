@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getProfile } from "@/lib/profile.server";
@@ -6,9 +7,12 @@ import {
   formatINR,
   formatOrderDate,
   getUserOrders,
+  groupOrdersByPayment,
 } from "@/lib/orders.server";
+import { getCustomerAddresses } from "@/lib/customer-addresses.server";
 import { SignOutButton } from "@/components/auth/SignOutButton";
 import { ProfileEditForm } from "@/components/account/ProfileEditForm";
+import { AddressManager } from "@/components/account/AddressManager";
 import { PageEntrance } from "@/components/layout/PageEntrance";
 import { isAdmin } from "@/lib/auth/admin-allowlist";
 
@@ -44,11 +48,14 @@ export default async function AccountPage({ searchParams }: AccountPageProps) {
     redirect("/login?next=/account");
   }
 
-  const [profile, orders] = await Promise.all([
+  const [profile, orders, addresses] = await Promise.all([
     getProfile(user.id),
     getUserOrders(user.id),
+    getCustomerAddresses(user.id),
   ]);
 
+  const orderGroups = groupOrdersByPayment(orders);
+  const recentOrders = orderGroups.slice(0, 3);
   const orderSuccess = searchParams?.order === "success";
   const adminDenied = searchParams?.admin_denied === "1";
   const isAdminUser = isAdmin(user.id, profile?.role);
@@ -146,37 +153,58 @@ export default async function AccountPage({ searchParams }: AccountPageProps) {
 
         <section
           data-fade-up
-          className="border border-white/10 bg-white/[0.02] p-6 md:p-8"
+          className="mb-10 border border-white/10 bg-white/[0.02] p-6 md:p-8"
         >
           <h2 className="mb-6 text-xs uppercase tracking-[0.25em] text-muted">
-            Order history
+            Saved addresses
           </h2>
+          <AddressManager initialAddresses={addresses} />
+        </section>
 
-          {orders.length === 0 ? (
+        <section
+          data-fade-up
+          className="border border-white/10 bg-white/[0.02] p-6 md:p-8"
+        >
+          <div className="mb-6 flex items-center justify-between gap-4">
+            <h2 className="text-xs uppercase tracking-[0.25em] text-muted">
+              Recent orders
+            </h2>
+            {orderGroups.length > 0 && (
+              <Link
+                href="/account/orders"
+                className="text-xs uppercase tracking-[0.2em] text-muted transition-colors hover:text-foreground"
+              >
+                View all
+              </Link>
+            )}
+          </div>
+
+          {recentOrders.length === 0 ? (
             <p className="text-sm text-foreground/60">No orders yet.</p>
           ) : (
             <ul className="space-y-4">
-              {orders.map((order) => (
+              {recentOrders.map((group) => (
                 <li
-                  key={order.id}
+                  key={group.key}
                   className="border-b border-white/10 pb-4 last:border-b-0 last:pb-0"
                 >
                   <div className="flex items-start justify-between gap-4">
                     <div>
                       <p className="text-sm uppercase tracking-wide text-foreground">
-                        {order.product_name}
+                        {group.items.length === 1
+                          ? group.items[0].product_name
+                          : `${group.items.length} items`}
                       </p>
                       <p className="mt-1 text-xs text-muted">
-                        Size {order.size} × {order.quantity} ·{" "}
-                        {formatOrderDate(order.created_at)}
+                        {formatOrderDate(group.created_at)}
                       </p>
                     </div>
                     <div className="text-right">
                       <p className="text-sm text-foreground">
-                        {formatINR(order.amount)}
+                        {formatINR(group.total_amount)}
                       </p>
                       <p className="mt-1 text-xs uppercase tracking-[0.15em] text-muted">
-                        {order.status}
+                        {group.status}
                       </p>
                     </div>
                   </div>

@@ -64,6 +64,62 @@ export type Database = {
           },
         ];
       };
+      customer_addresses: {
+        Row: {
+          id: string;
+          user_id: string;
+          full_name: string;
+          phone: string;
+          address_line_1: string;
+          address_line_2: string | null;
+          city: string;
+          state: string;
+          pincode: string;
+          country: string;
+          is_default: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          full_name: string;
+          phone: string;
+          address_line_1: string;
+          address_line_2?: string | null;
+          city: string;
+          state: string;
+          pincode: string;
+          country?: string;
+          is_default?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          full_name?: string;
+          phone?: string;
+          address_line_1?: string;
+          address_line_2?: string | null;
+          city?: string;
+          state?: string;
+          pincode?: string;
+          country?: string;
+          is_default?: boolean;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "customer_addresses_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: false;
+            referencedRelation: "users";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       orders: {
         Row: {
           id: string;

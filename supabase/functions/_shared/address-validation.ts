@@ -1,10 +1,28 @@
 export interface ShippingAddressPayload {
+  fullName?: string;
   line1: string;
   line2?: string;
   city: string;
   state: string;
   pincode: string;
   phone: string;
+  country?: string;
+}
+
+/** Normalize client shipping input into a complete order snapshot (stored on orders). */
+export function normalizeShippingSnapshot(
+  address: ShippingAddressPayload
+): ShippingAddressPayload {
+  return {
+    fullName: address.fullName?.trim() || undefined,
+    line1: address.line1.trim(),
+    line2: address.line2?.trim() || undefined,
+    city: address.city.trim(),
+    state: address.state.trim(),
+    pincode: address.pincode.trim(),
+    phone: address.phone.trim(),
+    country: address.country?.trim() || "India",
+  };
 }
 
 export function isValidShippingAddress(

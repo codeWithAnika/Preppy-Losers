@@ -1,6 +1,9 @@
 import { getAuthenticatedUser, getServiceRoleClient } from "../_shared/auth.ts";
-import { isValidShippingAddress } from "../_shared/address-validation.ts";
-import type { ShippingAddressPayload } from "../_shared/address-validation.ts";
+import {
+  isValidShippingAddress,
+  normalizeShippingSnapshot,
+  type ShippingAddressPayload,
+} from "../_shared/address-validation.ts";
 import {
   getPaymentSession,
   isSessionExpired,
@@ -356,6 +359,8 @@ Deno.serve(async (req) => {
       itemCount: fulfillmentItems.length,
       sessionlessFallback,
     });
+
+    shippingForFulfillment = normalizeShippingSnapshot(shippingForFulfillment);
 
     const fulfillment = await runFulfillment(supabaseAdmin, {
       userId: user.id,

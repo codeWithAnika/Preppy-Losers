@@ -5,10 +5,25 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AuthField } from "@/components/auth/AuthField";
+import { AddressSelector, type AddressSelection } from "@/components/checkout/AddressSelector";
+import {
+  OrderSuccessModal,
+  type OrderSuccessDetails,
+} from "@/components/checkout/OrderSuccessModal";
 import { MagneticGlitchButton } from "@/components/ui/MagneticGlitchButton";
 import { createClient } from "@/lib/supabase/client";
 import { useCartStore } from "@/lib/cart-store";
-import { formatINR, getCartValidationError, type CartItem, type ShippingAddress } from "@/lib/cart";
+import {
+  formatINR,
+  getCartValidationError,
+  type CartItem,
+  type ShippingAddress,
+} from "@/lib/cart";
+import {
+  toShippingSnapshot,
+  type CustomerAddress,
+} from "@/lib/customer-addresses";
+import { saveCheckoutAddressAction } from "@/lib/customer-addresses.actions";
 import {
   getFunctionErrorMessage,
   invokeCreateOrderWithRetry,
@@ -29,7 +44,7 @@ import { requestEmailNotification } from "@/lib/email/notify-client";
 interface CheckoutFormProps {
   userEmail: string;
   userName: string;
-  defaultAddress: ShippingAddress | null;
+  savedAddresses: CustomerAddress[];
 }
 
 interface CreateOrderResponse extends FunctionResponseBody {
@@ -52,19 +67,27 @@ function formatRazorpayContact(phone: string): string {
   return digits;
 }
 
-const emptyAddress: ShippingAddress = {
-  line1: "",
-  line2: "",
-  city: "",
-  state: "",
-  pincode: "",
-  phone: "",
-};
+function emptyAddress(fullName = ""): ShippingAddress {
+  return {
+    fullName,
+    line1: "",
+    line2: "",
+    city: "",
+    state: "",
+    pincode: "",
+    phone: "",
+    country: "India",
+  };
+}
+
+function addressFromSaved(saved: CustomerAddress): ShippingAddress {
+  return toShippingSnapshot(saved);
+}
 
 export function CheckoutForm({
   userEmail,
   userName,
-  defaultAddress,
+  savedAddresses,
 }: CheckoutFormProps) {
   const router = useRouter();
   const items = useCartStore((state) => state.items);
@@ -72,17 +95,37 @@ export function CheckoutForm({
   const clearCart = useCartStore((state) => state.clearCart);
   const payInFlightRef = useRef(false);
 
+  const defaultSaved =
+    savedAddresses.find((entry) => entry.isDefault) ?? savedAddresses[0] ?? null;
+
+  const [selection, setSelection] = useState<AddressSelection>(
+    defaultSaved ? { type: "saved", id: defaultSaved.id } : { type: "new" }
+  );
   const [address, setAddress] = useState<ShippingAddress>(
-    defaultAddress ?? emptyAddress
+    defaultSaved ? addressFromSaved(defaultSaved) : emptyAddress(userName)
   );
   const [loading, setLoading] = useState(false);
   const [verifying, setVerifying] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
+  const [successDetails, setSuccessDetails] = useState<OrderSuccessDetails | null>(
+    null
+  );
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    if (selection.type === "saved") {
+      const saved = savedAddresses.find((entry) => entry.id === selection.id);
+      if (saved) {
+        setAddress(addressFromSaved(saved));
+      }
+    } else {
+      setAddress(emptyAddress(userName));
+    }
+  }, [selection, savedAddresses, userName]);
 
   const subtotal = mounted ? getSubtotal() : 0;
   const cartValidationError = mounted ? getCartValidationError(items) : null;
@@ -191,7 +234,7 @@ export function CheckoutForm({
         name: "Preppy Losers",
         description: "Drop purchase",
         prefill: {
-          name: userName || undefined,
+          name: address.fullName || userName || undefined,
           email: userEmail || undefined,
           contact: formatRazorpayContact(address.phone) || undefined,
         },
@@ -220,6 +263,7 @@ export function CheckoutForm({
                 "Verification failed. Contact support if you were charged."
               )
             );
+            payInFlightRef.current = false;
             return;
           }
 
@@ -229,7 +273,7 @@ export function CheckoutForm({
               orderId: response.razorpay_order_id,
               paymentId: response.razorpay_payment_id,
               amountInr: checkoutParams.amountRupee,
-              customerName: userName,
+              customerName: address.fullName || userName,
               items: items.map((item) => ({
                 productName: item.productName,
                 size: item.size,
@@ -245,10 +289,32 @@ export function CheckoutForm({
                 phone: address.phone,
               },
             });
+
+            void saveCheckoutAddressAction({
+              fullName: address.fullName || userName,
+              phone: address.phone,
+              line1: address.line1,
+              line2: address.line2,
+              city: address.city,
+              state: address.state,
+              pincode: address.pincode,
+              country: address.country ?? "India",
+              isDefault: true,
+            });
           }
 
           clearCart();
-          router.push("/account?order=success");
+          setSuccessDetails({
+            orderId: response.razorpay_order_id,
+            amountInr: checkoutParams.amountRupee,
+            items: items.map((item) => ({
+              productName: item.productName,
+              size: item.size,
+              quantity: item.quantity,
+              lineTotalInr: item.price * item.quantity,
+            })),
+          });
+          payInFlightRef.current = false;
           router.refresh();
         },
         modal: {
@@ -295,7 +361,7 @@ export function CheckoutForm({
     return null;
   }
 
-  if (items.length === 0) {
+  if (items.length === 0 && !successDetails) {
     return (
       <div className="border border-white/10 bg-white/[0.02] p-8 text-center">
         <p className="mb-6 text-sm text-muted">Your cart is empty.</p>
@@ -322,125 +388,153 @@ export function CheckoutForm({
   const isBusy = loading || verifying;
 
   return (
-    <form onSubmit={handlePay} className="grid gap-8 lg:grid-cols-2 lg:items-start">
-      <section className="border border-white/10 bg-white/[0.02] p-6 md:p-8">
-        <h2 className="mb-6 text-xs uppercase tracking-[0.25em] text-muted">
-          Shipping address
-        </h2>
+    <>
+      {successDetails && (
+        <OrderSuccessModal
+          details={successDetails}
+          onClose={() => setSuccessDetails(null)}
+        />
+      )}
 
-        <div className="space-y-5">
-          <AuthField
-            label="Address line 1"
-            required
-            value={address.line1}
-            onChange={(e) => updateField("line1", e.target.value)}
-            placeholder="Street address"
+      <form onSubmit={handlePay} className="grid gap-8 lg:grid-cols-2 lg:items-start">
+        <section className="border border-white/10 bg-white/[0.02] p-6 md:p-8">
+          <h2 className="mb-6 text-xs uppercase tracking-[0.25em] text-muted">
+            Shipping address
+          </h2>
+
+          <AddressSelector
+            addresses={savedAddresses}
+            selection={selection}
+            onSelect={setSelection}
           />
-          <AuthField
-            label="Address line 2"
-            value={address.line2 ?? ""}
-            onChange={(e) => updateField("line2", e.target.value)}
-            placeholder="Apartment, suite, etc."
-          />
-          <div className="grid gap-5 sm:grid-cols-2">
-            <AuthField
-              label="City"
-              required
-              value={address.city}
-              onChange={(e) => updateField("city", e.target.value)}
-            />
-            <AuthField
-              label="State"
-              required
-              value={address.state}
-              onChange={(e) => updateField("state", e.target.value)}
-            />
-          </div>
-          <div className="grid gap-5 sm:grid-cols-2">
-            <AuthField
-              label="Pincode"
-              required
-              value={address.pincode}
-              onChange={(e) => updateField("pincode", e.target.value)}
-              inputMode="numeric"
-              pattern="\d{6}"
-            />
-            <AuthField
-              label="Phone"
-              required
-              type="tel"
-              value={address.phone}
-              onChange={(e) => updateField("phone", e.target.value)}
-            />
-          </div>
-        </div>
-      </section>
 
-      <section className="border border-white/10 bg-white/[0.02] p-6 md:p-8">
-        <h2 className="mb-6 text-xs uppercase tracking-[0.25em] text-muted">
-          Order summary
-        </h2>
-
-        <ul className="mb-6 space-y-4">
-          {items.map((item: CartItem) => (
-            <li
-              key={`${item.productId}-${item.size}`}
-              className="flex gap-4 border-b border-white/10 pb-4"
-            >
-              <div className="relative h-16 w-14 shrink-0 overflow-hidden bg-neutral-900">
-                <Image
-                  src={item.productImage}
-                  alt={item.productName}
-                  fill
-                  className="object-cover"
-                  sizes="56px"
-                />
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm uppercase tracking-wide text-foreground">
-                  {item.productName}
-                </p>
-                <p className="mt-1 text-xs text-muted">
-                  Size {item.size} × {item.quantity}
-                </p>
-              </div>
-              <p className="text-sm text-foreground">
-                {formatINR(item.price * item.quantity)}
+          <div className="space-y-5">
+            <AuthField
+              label="Full name"
+              required
+              value={address.fullName ?? ""}
+              onChange={(e) => updateField("fullName", e.target.value)}
+            />
+            <AuthField
+              label="Address line 1"
+              required
+              value={address.line1}
+              onChange={(e) => updateField("line1", e.target.value)}
+              placeholder="Street address"
+            />
+            <AuthField
+              label="Address line 2"
+              value={address.line2 ?? ""}
+              onChange={(e) => updateField("line2", e.target.value)}
+              placeholder="Apartment, suite, etc."
+            />
+            <div className="grid gap-5 sm:grid-cols-2">
+              <AuthField
+                label="City"
+                required
+                value={address.city}
+                onChange={(e) => updateField("city", e.target.value)}
+              />
+              <AuthField
+                label="State"
+                required
+                value={address.state}
+                onChange={(e) => updateField("state", e.target.value)}
+              />
+            </div>
+            <div className="grid gap-5 sm:grid-cols-2">
+              <AuthField
+                label="Pincode"
+                required
+                value={address.pincode}
+                onChange={(e) => updateField("pincode", e.target.value)}
+                inputMode="numeric"
+                pattern="\d{6}"
+              />
+              <AuthField
+                label="Phone"
+                required
+                type="tel"
+                value={address.phone}
+                onChange={(e) => updateField("phone", e.target.value)}
+              />
+            </div>
+            {selection.type === "saved" && (
+              <p className="text-xs text-muted">
+                You can edit this delivery address for this order. Changes here
+                do not update your saved address unless you save it from your
+                account after checkout.
               </p>
-            </li>
-          ))}
-        </ul>
+            )}
+          </div>
+        </section>
 
-        <div className="mb-6 flex items-center justify-between border-t border-white/10 pt-4">
-          <span className="text-xs uppercase tracking-[0.2em] text-muted">
-            Total
-          </span>
-          <span className="text-lg text-foreground">{formatINR(subtotal)}</span>
-        </div>
+        <section className="border border-white/10 bg-white/[0.02] p-6 md:p-8">
+          <h2 className="mb-6 text-xs uppercase tracking-[0.25em] text-muted">
+            Order summary
+          </h2>
 
-        {error && (
-          <p className="mb-4 text-xs text-accent" role="alert">
-            {error}
+          <ul className="mb-6 space-y-4">
+            {items.map((item: CartItem) => (
+              <li
+                key={`${item.productId}-${item.size}`}
+                className="flex gap-4 border-b border-white/10 pb-4"
+              >
+                <div className="relative h-16 w-14 shrink-0 overflow-hidden bg-neutral-900">
+                  <Image
+                    src={item.productImage}
+                    alt={item.productName}
+                    fill
+                    className="object-cover"
+                    sizes="56px"
+                  />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm uppercase tracking-wide text-foreground">
+                    {item.productName}
+                  </p>
+                  <p className="mt-1 text-xs text-muted">
+                    Size {item.size} × {item.quantity}
+                  </p>
+                </div>
+                <p className="text-sm text-foreground">
+                  {formatINR(item.price * item.quantity)}
+                </p>
+              </li>
+            ))}
+          </ul>
+
+          <div className="mb-6 flex items-center justify-between border-t border-white/10 pt-4">
+            <span className="text-xs uppercase tracking-[0.2em] text-muted">
+              Total
+            </span>
+            <span className="text-lg text-foreground">{formatINR(subtotal)}</span>
+          </div>
+
+          {error && (
+            <p className="mb-4 text-xs text-accent" role="alert">
+              {error}
+            </p>
+          )}
+
+          <MagneticGlitchButton
+            type="submit"
+            variant="outline"
+            disabled={isBusy || !Number.isFinite(subtotal) || subtotal <= 0}
+            className="w-full"
+          >
+            {verifying
+              ? "Verifying payment..."
+              : loading
+                ? "Opening Razorpay..."
+                : "Pay with Razorpay"}
+          </MagneticGlitchButton>
+
+          <p className="mt-4 text-center text-xs text-muted">
+            Signed in as {userEmail}
           </p>
-        )}
-
-        <MagneticGlitchButton
-          type="submit"
-          variant="outline"
-          disabled={isBusy || !Number.isFinite(subtotal) || subtotal <= 0}
-          className="w-full"
-        >
-          {verifying
-            ? "Verifying payment..."
-            : loading
-              ? "Opening Razorpay..."
-              : "Pay with Razorpay"}
-        </MagneticGlitchButton>
-
-        <p className="mt-4 text-center text-xs text-muted">
-          Signed in as {userEmail}
-        </p>
-      </section>
-    </form>
+        </section>
+      </form>
+    </>
   );
 }

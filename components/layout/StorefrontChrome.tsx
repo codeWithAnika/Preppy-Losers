@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { Header } from "@/components/Header";
+import { Footer } from "@/components/Footer";
 import { CartDrawer } from "@/components/cart/CartDrawer";
 import { LoadingScreen } from "@/components/LoadingScreen";
 import { SiteAtmosphere } from "@/components/SiteAtmosphere";
@@ -25,6 +26,7 @@ export function StorefrontChrome({ children }: { children: ReactNode }) {
           <Header />
           <CartDrawer />
           <main className="relative z-20">{children}</main>
+          <Footer />
         </PageTransitionProvider>
       </SmoothScrollProvider>
     </>

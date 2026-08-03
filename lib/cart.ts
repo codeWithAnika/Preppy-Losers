@@ -168,12 +168,14 @@ export function getCartValidationError(items: CartItem[]): string | null {
 }
 
 export type ShippingAddress = {
+  fullName?: string;
   line1: string;
   line2?: string;
   city: string;
   state: string;
   pincode: string;
   phone: string;
+  country?: string;
 };
 
 export function formatINR(amount: number): string {

@@ -1,5 +1,8 @@
 import { getAuthenticatedUser, getServiceRoleClient } from "../_shared/auth.ts";
-import { isValidShippingAddress } from "../_shared/address-validation.ts";
+import {
+  isValidShippingAddress,
+  normalizeShippingSnapshot,
+} from "../_shared/address-validation.ts";
 import { toFulfillmentItems } from "../_shared/fulfillment.ts";
 import { jsonResponse, okResponse } from "../_shared/http.ts";
 import { logPayment, logPaymentError } from "../_shared/logger.ts";
@@ -72,6 +75,8 @@ Deno.serve(async (req) => {
       const { body: errBody, status } = paymentError("INVALID_ADDRESS", 400);
       return jsonResponse(errBody, status);
     }
+
+    const shippingSnapshot = normalizeShippingSnapshot(shippingAddress);
 
     const supabaseAdmin = getServiceRoleClient();
     if (!supabaseAdmin) {
@@ -221,7 +226,7 @@ Deno.serve(async (req) => {
           user_id: user.id,
           razorpay_order_id,
           items: fulfillmentItems,
-          shipping_address: shippingAddress,
+          shipping_address: shippingSnapshot,
           amount_paise: validation.order.totalPaise,
           status: "pending",
         })

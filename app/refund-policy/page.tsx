@@ -3,7 +3,7 @@ import { LegalLayout } from "@/components/legal/LegalLayout";
 import { LegalSection } from "@/components/legal/LegalSection";
 import {
   BRAND_NAME,
-  RETURN_WAREHOUSE_ADDRESS,
+  RETURN_POLICY,
   SUPPORT_EMAIL,
 } from "@/lib/legal/constants";
 
@@ -55,7 +55,8 @@ export default function RefundPolicyPage() {
 
       <LegalSection id="return-eligibility" title="Return Eligibility">
         <p>
-          We accept returns on eligible items within <strong>7 days</strong> of
+          We accept returns on eligible items within{" "}
+          <strong>{RETURN_POLICY.returnWindowDays} days</strong> of
           delivery, provided all of the following conditions are met:
         </p>
         <ul>
@@ -84,7 +85,7 @@ export default function RefundPolicyPage() {
           <li>Products that show signs of wear, washing, alteration, or damage caused after delivery</li>
           <li>Items returned without original tags or packaging</li>
           <li>Limited-edition drop items explicitly stated as non-returnable</li>
-          <li>Items returned after the 7-day return window has expired</li>
+          <li>Items returned after the {RETURN_POLICY.returnWindowDays}-day return window has expired</li>
         </ul>
         <p>
           Hygiene and quality standards apply to all returns. We reserve the
@@ -95,7 +96,7 @@ export default function RefundPolicyPage() {
       <LegalSection id="damaged-products" title="Damaged Products">
         <p>
           If your order arrives damaged or defective, please contact us within{" "}
-          <strong>48 hours</strong> of delivery at{" "}
+          <strong>{RETURN_POLICY.damagedReportHours} hours</strong> of delivery at{" "}
           <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>. Include your
           order number and clear photos of the product and packaging.
         </p>
@@ -111,7 +112,7 @@ export default function RefundPolicyPage() {
       <LegalSection id="wrong-item" title="Wrong Item Received">
         <p>
           If you receive an incorrect item or size due to our fulfilment error,
-          contact us within <strong>48 hours</strong> of delivery with your
+          contact us within <strong>{RETURN_POLICY.wrongItemReportHours} hours</strong> of delivery with your
           order number and photos of the item received.
         </p>
         <p>
@@ -128,10 +129,11 @@ export default function RefundPolicyPage() {
           the approval or rejection of your refund.
         </p>
         <p>
-          Approved refunds are initiated within <strong>5–7 business days</strong>{" "}
+          Approved refunds are initiated within{" "}
+          <strong>{RETURN_POLICY.refundProcessingBusinessDays} business days</strong>{" "}
           of receiving the returned product. Depending on your bank or payment
           provider, it may take an additional{" "}
-          <strong>5–10 business days</strong> for the amount to reflect in your
+          <strong>{RETURN_POLICY.refundBankDays} business days</strong> for the amount to reflect in your
           account.
         </p>
         <p>
@@ -174,12 +176,7 @@ export default function RefundPolicyPage() {
           Any price difference for exchanges between product variants will be
           communicated before the exchange is confirmed.
         </p>
-        {!RETURN_WAREHOUSE_ADDRESS && (
-          <p>
-            {/* TODO: Add return warehouse / pickup address before launch */}
-            Return address: [To be added before launch]
-          </p>
-        )}
+        <p>{RETURN_POLICY.returnShippingNote}</p>
       </LegalSection>
 
       <LegalSection id="contact" title="Contact Support">

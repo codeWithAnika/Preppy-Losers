@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { LegalLayout } from "@/components/legal/LegalLayout";
 import { LegalSection } from "@/components/legal/LegalSection";
-import { BRAND_NAME, SUPPORT_EMAIL } from "@/lib/legal/constants";
+import { BRAND_NAME, SHIPPING_POLICY, SUPPORT_EMAIL } from "@/lib/legal/constants";
 
 export const metadata: Metadata = {
   title: "Shipping Policy — PREPPY LOSERS",
@@ -32,7 +32,8 @@ export default function ShippingPolicyPage() {
       <LegalSection id="order-processing" title="Order Processing Time">
         <p>
           Orders are processed after successful payment confirmation through
-          Razorpay. Processing typically takes <strong>1–3 business days</strong>{" "}
+          Razorpay. Processing typically takes{" "}
+          <strong>{SHIPPING_POLICY.processingBusinessDays} business days</strong>{" "}
           from the date of order confirmation, excluding weekends and public
           holidays.
         </p>
@@ -53,10 +54,11 @@ export default function ShippingPolicyPage() {
         </p>
         <ul>
           <li>
-            <strong>Metro cities:</strong> 3–7 business days
+            <strong>Metro cities:</strong> {SHIPPING_POLICY.metroDeliveryDays} business days
           </li>
           <li>
-            <strong>Other serviceable locations in India:</strong> 5–10 business
+            <strong>Other serviceable locations in India:</strong>{" "}
+            {SHIPPING_POLICY.otherDeliveryDays} business
             days
           </li>
         </ul>
@@ -87,9 +89,9 @@ export default function ShippingPolicyPage() {
 
       <LegalSection id="serviceable-locations" title="Serviceable Locations">
         <p>
-          Currently, {BRAND_NAME} ships to serviceable pin codes across India
-          through our courier partners. We do not ship internationally at this
-          time unless explicitly announced on our website.
+          Currently, {BRAND_NAME} ships to serviceable pin codes across{" "}
+          {SHIPPING_POLICY.defaultCountry} through our courier partners.{" "}
+          {SHIPPING_POLICY.internationalNote}
         </p>
         <p>
           If your pin code is not serviceable at checkout, please contact us at{" "}
