@@ -126,7 +126,7 @@ export function CartDrawer() {
                         </span>
                         <button
                           type="button"
-                          disabled={item.quantity >= (item.maxStock || item.quantity)}
+                          disabled={item.quantity >= item.maxStock}
                           onClick={() =>
                             updateQuantity(
                               item.productId,

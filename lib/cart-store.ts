@@ -3,8 +3,27 @@ import { persist } from "zustand/middleware";
 import {
   getCartItemKey,
   getCartSubtotal,
+  normalizeCartItems,
+  parsePrice,
   type CartItem,
 } from "@/lib/cart";
+
+const DEFAULT_MAX_STOCK = 30;
+
+function resolveMaxStock(
+  ...candidates: Array<number | undefined>
+): number {
+  for (const value of candidates) {
+    if (typeof value === "number" && Number.isFinite(value) && value >= 1) {
+      return Math.floor(value);
+    }
+  }
+  return DEFAULT_MAX_STOCK;
+}
+
+function capQuantity(quantity: number, maxStock: number): number {
+  return Math.min(Math.max(1, Math.floor(quantity)), maxStock);
+}
 
 interface CartState {
   items: CartItem[];
@@ -27,9 +46,17 @@ export const useCartStore = create<CartState>()(
       isOpen: false,
 
       addItem: (item) => {
-        const quantity = item.quantity ?? 1;
+        const price = parsePrice(item.price);
+        if (price === null) {
+          if (process.env.NODE_ENV !== "production") {
+            console.warn("[cart] Refusing to add item with invalid price:", item);
+          }
+          return;
+        }
+
+        const quantity = capQuantity(item.quantity ?? 1, DEFAULT_MAX_STOCK);
         const key = getCartItemKey(item.productId, item.size);
-        const maxStock = item.maxStock ?? quantity;
+        const maxStock = resolveMaxStock(item.maxStock, quantity);
 
         set((state) => {
           const existing = state.items.find(
@@ -37,14 +64,20 @@ export const useCartStore = create<CartState>()(
           );
 
           if (existing) {
-            const nextQuantity = Math.min(
+            const stockCap = resolveMaxStock(item.maxStock, existing.maxStock);
+            const nextQuantity = capQuantity(
               existing.quantity + quantity,
-              existing.maxStock
+              stockCap
             );
             return {
               items: state.items.map((entry) =>
                 getCartItemKey(entry.productId, entry.size) === key
-                  ? { ...entry, quantity: nextQuantity, maxStock: item.maxStock ?? entry.maxStock }
+                  ? {
+                      ...entry,
+                      price,
+                      quantity: nextQuantity,
+                      maxStock: stockCap,
+                    }
                   : entry
               ),
             };
@@ -57,9 +90,9 @@ export const useCartStore = create<CartState>()(
                 productId: item.productId,
                 productName: item.productName,
                 productImage: item.productImage,
-                price: item.price,
+                price,
                 size: item.size,
-                quantity: Math.min(quantity, maxStock),
+                quantity: capQuantity(quantity, maxStock),
                 maxStock,
               },
             ],
@@ -81,9 +114,10 @@ export const useCartStore = create<CartState>()(
               return entry;
             }
 
+            const stockCap = resolveMaxStock(entry.maxStock);
             return {
               ...entry,
-              quantity: Math.min(quantity, entry.maxStock || quantity),
+              quantity: capQuantity(quantity, stockCap),
             };
           }),
         }));
@@ -111,7 +145,20 @@ export const useCartStore = create<CartState>()(
     }),
     {
       name: "pl-cart",
+      version: 2,
       partialize: (state) => ({ items: state.items }),
+      migrate: (persistedState) => {
+        const state = persistedState as { items?: unknown } | undefined;
+        return { items: normalizeCartItems(state?.items ?? []) };
+      },
+      merge: (persistedState, currentState) => {
+        const persisted = persistedState as { items?: unknown } | undefined;
+        return {
+          ...currentState,
+          ...persisted,
+          items: normalizeCartItems(persisted?.items ?? []),
+        };
+      },
     }
   )
 );

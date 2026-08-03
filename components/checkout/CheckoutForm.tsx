@@ -8,7 +8,7 @@ import { AuthField } from "@/components/auth/AuthField";
 import { MagneticGlitchButton } from "@/components/ui/MagneticGlitchButton";
 import { createClient } from "@/lib/supabase/client";
 import { useCartStore } from "@/lib/cart-store";
-import { formatINR, type CartItem, type ShippingAddress } from "@/lib/cart";
+import { formatINR, getCartValidationError, type CartItem, type ShippingAddress } from "@/lib/cart";
 import {
   getFunctionErrorMessage,
   invokeCreateOrderWithRetry,
@@ -85,6 +85,7 @@ export function CheckoutForm({
   }, []);
 
   const subtotal = mounted ? getSubtotal() : 0;
+  const cartValidationError = mounted ? getCartValidationError(items) : null;
 
   const updateField = (field: keyof ShippingAddress, value: string) => {
     setAddress((prev) => ({ ...prev, [field]: value }));
@@ -99,6 +100,17 @@ export function CheckoutForm({
 
     if (items.length === 0) {
       setError("Your cart is empty.");
+      return;
+    }
+
+    const validationError = getCartValidationError(items);
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+
+    if (!Number.isFinite(subtotal) || subtotal <= 0) {
+      setError("Unable to calculate order total. Please refresh your cart.");
       return;
     }
 
@@ -294,6 +306,19 @@ export function CheckoutForm({
     );
   }
 
+  if (cartValidationError) {
+    return (
+      <div className="border border-white/10 bg-white/[0.02] p-8 text-center">
+        <p className="mb-6 text-sm text-muted" role="alert">
+          {cartValidationError}
+        </p>
+        <Link href="/shop">
+          <MagneticGlitchButton variant="outline">Back to shop</MagneticGlitchButton>
+        </Link>
+      </div>
+    );
+  }
+
   const isBusy = loading || verifying;
 
   return (
@@ -402,7 +427,7 @@ export function CheckoutForm({
         <MagneticGlitchButton
           type="submit"
           variant="outline"
-          disabled={isBusy}
+          disabled={isBusy || !Number.isFinite(subtotal) || subtotal <= 0}
           className="w-full"
         >
           {verifying

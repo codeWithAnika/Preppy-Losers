@@ -54,7 +54,7 @@ export function ProductDetails({
       productId: product.id,
       productName: product.name,
       productImage: product.images[0] ?? "/product-placeholder.webp",
-      price: product.price,
+      price: Number(product.price),
       size: selectedSize,
       quantity,
       maxStock: selectedStock,
