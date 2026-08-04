@@ -24,18 +24,25 @@ const socialIconMap = {
   threads: ThreadsIcon,
 } as const;
 
+const linkClassName =
+  "inline-flex min-h-11 items-center text-xs uppercase tracking-widest text-foreground/70 transition-colors hover:text-foreground";
+
 export function Footer() {
   return (
-    <footer className="site-footer relative border-t border-black/35 bg-blood-red px-4 py-16 text-white md:px-8">
+    <footer className="site-footer relative z-20 border-t border-white/10 bg-background px-4 py-14 text-foreground md:px-8 md:py-16">
       <div
-        className="grain-overlay pointer-events-none absolute inset-0 opacity-[0.07]"
+        className="pointer-events-none absolute inset-0 bg-gradient-to-b from-accent/10 via-background to-background"
+        aria-hidden="true"
+      />
+      <div
+        className="grain-overlay pointer-events-none absolute inset-0 opacity-[0.04]"
         aria-hidden="true"
       />
 
       <div className="relative mx-auto max-w-6xl">
-        <BrandWordmark className="mb-10 text-3xl font-bold leading-none tracking-widest text-white md:text-5xl" />
+        <BrandWordmark className="mb-8 text-3xl font-bold leading-none tracking-widest text-foreground md:mb-10 md:text-5xl" />
 
-        <div className="mb-10 flex gap-6">
+        <div className="mb-8 flex gap-4 md:mb-10 md:gap-6">
           {SOCIAL_LINKS.map((social) => {
             const Icon = socialIconMap[social.icon];
             return (
@@ -45,7 +52,7 @@ export function Footer() {
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label={social.label}
-                className="inline-flex min-h-11 min-w-11 items-center justify-center text-white/70 transition-colors hover:text-white"
+                className="inline-flex min-h-11 min-w-11 items-center justify-center border border-white/15 text-foreground/70 transition-colors hover:border-white/30 hover:text-foreground"
               >
                 <Icon size={20} />
               </a>
@@ -55,25 +62,22 @@ export function Footer() {
 
         <a
           href={`mailto:${SUPPORT_EMAIL}`}
-          className="mb-10 block text-sm text-white/70 transition-colors hover:text-white"
+          className="mb-8 block text-sm text-foreground/75 transition-colors hover:text-accent md:mb-10"
         >
           {SUPPORT_EMAIL}
         </a>
 
-        <div className="flex flex-wrap gap-6 border-t border-white/15 pt-8">
+        <div className="flex flex-wrap gap-x-6 gap-y-2 border-t border-white/10 pt-8">
           {FOOTER_NAV_LINKS.map((link) =>
             link.href === "/account" ? (
-              <AuthReturnLink
-                key={link.href}
-                className="inline-flex min-h-11 items-center text-xs uppercase tracking-widest text-white/55 transition-colors hover:text-white"
-              >
+              <AuthReturnLink key={link.href} className={linkClassName}>
                 {link.label}
               </AuthReturnLink>
             ) : (
               <TransitionLink
                 key={link.href}
                 href={link.href}
-                className="inline-flex min-h-11 items-center text-xs uppercase tracking-widest text-white/55 transition-colors hover:text-white"
+                className={linkClassName}
               >
                 {link.label}
               </TransitionLink>
@@ -81,7 +85,7 @@ export function Footer() {
           )}
         </div>
 
-        <p className="mt-8 text-xs text-white/40">
+        <p className="mt-8 text-xs text-foreground/45">
           &copy; {new Date().getFullYear()} Preppy Losers. All rights reserved.
         </p>
       </div>

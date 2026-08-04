@@ -24,5 +24,3 @@ export const SOCIAL_LINKS = [
   },
   { label: "Threads", href: "https://threads.net", icon: "threads" as const },
 ];
-
-export const CONTACT_EMAIL = "loserspreppy@gmail.com";

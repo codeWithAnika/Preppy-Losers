@@ -137,7 +137,7 @@ export function TeamSwipeCards({ members }: TeamSwipeCardsProps) {
             <Image
               key={member.photoUrl + index}
               src={member.photoUrl}
-              alt={member.name}
+              alt=""
               fill
               className="object-cover"
               sizes="(max-width: 768px) 88vw, 384px"
@@ -146,14 +146,7 @@ export function TeamSwipeCards({ members }: TeamSwipeCardsProps) {
             <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/20" />
           </div>
 
-          <div className="border-t border-white/10 px-5 py-5 text-center">
-            <h3 className="font-doctor-glitch text-xl tracking-tight text-foreground md:text-2xl">
-              {member.name}
-            </h3>
-            <p className="mt-1.5 text-[11px] uppercase tracking-[0.28em] text-foreground/50">
-              {member.role}
-            </p>
-          </div>
+          <div className="border-t border-white/10 px-5 py-5" aria-hidden="true" />
         </article>
       </div>
 
