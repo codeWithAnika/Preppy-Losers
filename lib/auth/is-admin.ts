@@ -2,7 +2,6 @@ import "server-only";
 
 import { redirect } from "next/navigation";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
-import { getProfile } from "@/lib/profile.server";
 import type { Profile } from "@/lib/profile";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/database.types";
@@ -103,22 +102,26 @@ export async function requireAdmin(
     redirect(`/login?next=${encodeURIComponent(nextPath)}`);
   }
 
-  const authorization = await resolveAdminAuthorization(supabase, user.id);
+  const { data: profile, error } = await supabase
+    .from("profiles")
+    .select("id, full_name, phone, role, created_at")
+    .eq("id", user.id)
+    .maybeSingle();
 
-  if (!authorization.isAdmin) {
-    logAdminDev("requireAdmin denied", {
+  if (error) {
+    console.error("[admin] Failed to read profile:", error.message, {
+      code: error.code,
       userId: user.id,
-      allowlisted: authorization.allowlisted,
-      role: authorization.role,
-      profileFound: authorization.profileFound,
     });
-    redirect("/account?admin_denied=1");
   }
 
-  const profile = await getProfile(user.id);
-
   if (!profile || !isAdmin(user.id, profile.role)) {
-    logAdminDev("requireAdmin profile re-check failed", { userId: user.id });
+    logAdminDev("requireAdmin denied", {
+      userId: user.id,
+      allowlisted: isAdminAllowlisted(user.id),
+      role: profile?.role ?? null,
+      profileFound: Boolean(profile),
+    });
     redirect("/account?admin_denied=1");
   }
 

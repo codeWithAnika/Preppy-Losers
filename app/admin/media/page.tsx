@@ -1,11 +1,8 @@
 import { MediaLibrary } from "@/components/admin/MediaLibrary";
 import { fetchMediaLibrary } from "@/lib/admin/media.server";
-import { requireAdmin } from "@/lib/admin/auth";
 
 export default async function AdminMediaPage() {
-  await requireAdmin("/admin/media");
   const items = await fetchMediaLibrary();
-
   return (
     <div className="admin-page">
       <div className="admin-page__header">

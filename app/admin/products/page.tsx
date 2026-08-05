@@ -1,15 +1,12 @@
 import { ProductTable } from "@/components/admin/ProductTable";
 import { fetchAdminProducts } from "@/lib/admin/queries";
-import { requireAdmin } from "@/lib/admin/auth";
 
 interface ProductsPageProps {
   searchParams?: { q?: string };
 }
 
 export default async function AdminProductsPage({ searchParams }: ProductsPageProps) {
-  await requireAdmin("/admin/products");
   const products = await fetchAdminProducts();
-
   return (
     <div className="admin-page">
       <div className="admin-page__header">

@@ -34,6 +34,7 @@ export const metadata: Metadata = {
     title: "Preppy Losers — Underground Street Culture",
     description:
       "Underground street culture for the bold. Premium streetwear drops from Preppy Losers.",
+    images: [{ url: "/logo-badge.webp", width: 512, height: 512, alt: "Preppy Losers" }],
   },
   twitter: {
     card: "summary_large_image",

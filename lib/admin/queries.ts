@@ -50,7 +50,9 @@ export async function fetchAdminOrders(): Promise<AdminOrderRow[]> {
   return (data ?? []) as AdminOrderRow[];
 }
 
-export async function fetchAdminCustomers(): Promise<AdminCustomerRow[]> {
+export async function fetchAdminCustomers(
+  orderRows?: Array<{ user_id: string; amount: number }>
+): Promise<AdminCustomerRow[]> {
   const supabase = createClient();
 
   const { data: profiles, error: profileError } = await supabase.rpc(
@@ -64,14 +66,18 @@ export async function fetchAdminCustomers(): Promise<AdminCustomerRow[]> {
 
   const customerProfiles = (profiles ?? []) as AdminCustomerProfileRpc[];
 
-  const { data: orders, error: ordersError } = await supabase
-    .from("orders")
-    .select("user_id, amount");
+  let orders = orderRows;
+  if (!orders) {
+    const { data, error: ordersError } = await supabase
+      .from("orders")
+      .select("user_id, amount");
 
-  if (ordersError) throw new Error(ordersError.message);
+    if (ordersError) throw new Error(ordersError.message);
+    orders = data ?? [];
+  }
 
   const orderStats = new Map<string, { count: number; total: number }>();
-  for (const order of orders ?? []) {
+  for (const order of orders) {
     const current = orderStats.get(order.user_id) ?? { count: 0, total: 0 };
     orderStats.set(order.user_id, {
       count: current.count + 1,
@@ -183,11 +189,14 @@ export async function fetchAdminPromoCodes(): Promise<AdminPromoCodeRow[]> {
 }
 
 export async function fetchDashboardStats(): Promise<DashboardStats> {
-  const [products, orders, customers] = await Promise.all([
+  const [products, orders] = await Promise.all([
     fetchAdminProducts(),
     fetchAdminOrders(),
-    fetchAdminCustomers(),
   ]);
+
+  const customers = await fetchAdminCustomers(
+    orders.map((order) => ({ user_id: order.user_id, amount: order.amount }))
+  );
 
   const paidOrders = orders.filter(
     (order) => order.status !== "cancelled" && order.status !== "pending"

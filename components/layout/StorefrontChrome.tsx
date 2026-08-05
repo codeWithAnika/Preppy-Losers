@@ -1,34 +1,26 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
-import { Header } from "@/components/Header";
-import { Footer } from "@/components/Footer";
-import { CartDrawer } from "@/components/cart/CartDrawer";
-import { LoadingScreen } from "@/components/LoadingScreen";
-import { SiteAtmosphere } from "@/components/SiteAtmosphere";
-import { SmoothScrollProvider } from "@/components/SmoothScrollProvider";
-import { PageTransitionProvider } from "@/components/PageTransitionProvider";
-import { TextDistressFilter } from "@/components/ui/TextDistressFilter";
+import { LiteStorefrontShell } from "@/components/layout/LiteStorefrontShell";
+import { isLiteStorefrontRoute } from "@/lib/storefront-routes";
+
+const AnimatedStorefrontShell = dynamic(
+  () =>
+    import("@/components/layout/AnimatedStorefrontShell").then((mod) => ({
+      default: mod.AnimatedStorefrontShell,
+    })),
+  { ssr: false }
+);
 
 export function StorefrontChrome({ children }: { children: ReactNode }) {
-  const pathname = usePathname();
-  const isHomepage = pathname === "/";
+  const pathname = usePathname() ?? "";
+  const isLite = isLiteStorefrontRoute(pathname);
 
-  return (
-    <>
-      <div className="site-background-overlay fixed inset-0 z-10" aria-hidden="true" />
-      {!isHomepage && <SiteAtmosphere />}
-      <TextDistressFilter />
-      <SmoothScrollProvider>
-        <PageTransitionProvider>
-          <LoadingScreen />
-          <Header />
-          <CartDrawer />
-          <main className="relative z-20">{children}</main>
-          <Footer />
-        </PageTransitionProvider>
-      </SmoothScrollProvider>
-    </>
-  );
+  if (isLite) {
+    return <LiteStorefrontShell>{children}</LiteStorefrontShell>;
+  }
+
+  return <AnimatedStorefrontShell>{children}</AnimatedStorefrontShell>;
 }

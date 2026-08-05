@@ -1,11 +1,8 @@
 import { SettingsForm } from "@/components/admin/SettingsForm";
 import { fetchStoreSettings } from "@/lib/admin/queries";
-import { requireAdmin } from "@/lib/admin/auth";
 
 export default async function AdminSettingsPage() {
-  await requireAdmin("/admin/settings");
   const settings = await fetchStoreSettings();
-
   return (
     <div className="admin-page">
       <div className="admin-page__header">

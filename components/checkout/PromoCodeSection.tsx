@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { CartItem } from "@/lib/cart";
 import { formatINR } from "@/lib/cart";
 import { createClient } from "@/lib/supabase/client";
@@ -41,8 +41,13 @@ export function PromoCodeSection({
   const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const applyInFlightRef = useRef(false);
 
   const handleApply = async () => {
+    if (applyInFlightRef.current || loading) {
+      return;
+    }
+
     const normalizedCode = sanitizePromoInput(code);
     if (!normalizedCode) {
       setError("Enter a promo code.");
@@ -56,6 +61,7 @@ export function PromoCodeSection({
 
     setLoading(true);
     setError(null);
+    applyInFlightRef.current = true;
 
     try {
       const { data, error: invokeError } = await invokeValidatePromo(
@@ -76,6 +82,7 @@ export function PromoCodeSection({
     } catch {
       setError("Unable to apply promo code.");
     } finally {
+      applyInFlightRef.current = false;
       setLoading(false);
     }
   };

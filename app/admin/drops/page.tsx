@@ -1,12 +1,9 @@
 import { DropManager } from "@/components/admin/DropManager";
 import { DropStockPanel } from "@/components/admin/InventoryEditor";
 import { fetchAdminProducts, groupProductsByDrop } from "@/lib/admin/queries";
-import { requireAdmin } from "@/lib/admin/auth";
 
 export default async function AdminDropsPage() {
-  await requireAdmin("/admin/drops");
-  const products = await fetchAdminProducts();
-  const drops = groupProductsByDrop(products);
+  const products = await fetchAdminProducts();  const drops = groupProductsByDrop(products);
   const activeProduct = products.find((product) => product.is_active) ?? null;
 
   return (

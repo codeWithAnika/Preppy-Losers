@@ -1,11 +1,8 @@
 import { ProductEditor } from "@/components/admin/ProductEditor";
 import { fetchAdminProducts } from "@/lib/admin/queries";
-import { requireAdmin } from "@/lib/admin/auth";
 
 export default async function NewProductPage() {
-  await requireAdmin("/admin/products/new");
-  const products = await fetchAdminProducts();
-  const nextDropNumber =
+  const products = await fetchAdminProducts();  const nextDropNumber =
     products.reduce((max, product) => Math.max(max, product.drop_number ?? 0), 0) + 1;
 
   return (

@@ -1,11 +1,8 @@
 import { CustomersTable } from "@/components/admin/CustomersTable";
 import { fetchAdminCustomers } from "@/lib/admin/queries";
-import { requireAdmin } from "@/lib/admin/auth";
 
 export default async function AdminCustomersPage() {
-  await requireAdmin("/admin/customers");
   const customers = await fetchAdminCustomers();
-
   return (
     <div className="admin-page">
       <div className="admin-page__header">

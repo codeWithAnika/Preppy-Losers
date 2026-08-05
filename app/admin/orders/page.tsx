@@ -1,15 +1,12 @@
 import { OrdersTable } from "@/components/admin/OrdersTable";
 import { fetchAdminCustomers, fetchAdminOrders } from "@/lib/admin/queries";
 import type { AdminOrderWithCustomer } from "@/lib/admin/types";
-import { requireAdmin } from "@/lib/admin/auth";
 
 export default async function AdminOrdersPage() {
-  await requireAdmin("/admin/orders");
-  const [orders, customers] = await Promise.all([
-    fetchAdminOrders(),
-    fetchAdminCustomers(),
-  ]);
-
+  const orders = await fetchAdminOrders();
+  const customers = await fetchAdminCustomers(
+    orders.map((order) => ({ user_id: order.user_id, amount: order.amount }))
+  );
   const profileMap = new Map(customers.map((customer) => [customer.id, customer]));
   const ordersWithCustomers: AdminOrderWithCustomer[] = orders.map((order) => ({
     ...order,

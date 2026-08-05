@@ -11,10 +11,8 @@ import { DashboardCharts } from "@/components/admin/DashboardCharts";
 import { QuickActions } from "@/components/admin/QuickActions";
 import { fetchDashboardStats } from "@/lib/admin/queries";
 import { formatAdminDate, formatINR, shortId } from "@/lib/admin/format";
-import { requireAdmin } from "@/lib/admin/auth";
 
 export default async function AdminDashboardPage() {
-  await requireAdmin("/admin/dashboard");
   const stats = await fetchDashboardStats();
 
   return (
