@@ -1,9 +1,9 @@
 import { BRAND_NAME, SUPPORT_EMAIL } from "@/lib/legal/constants";
-import { getSiteUrl } from "@/lib/env/public";
+import { getEmailSiteUrl } from "@/lib/env/public";
 import { emailStyles } from "@/lib/email/styles/email-styles";
 
 export function EmailFooter() {
-  const siteUrl = getSiteUrl();
+  const siteUrl = getEmailSiteUrl();
   const siteHost = siteUrl.replace(/^https?:\/\//, "");
 
   return (

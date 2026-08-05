@@ -1,5 +1,5 @@
 import { BRAND_NAME, SUPPORT_EMAIL } from "@/lib/legal/constants";
-import { getSiteUrl } from "@/lib/env/public";
+import { getEmailSiteUrl } from "@/lib/env/public";
 
 const BRAND_COLOR = "#8b1e1e";
 const BG_COLOR = "#0a0a0a";
@@ -13,7 +13,7 @@ export function wrapEmailHtml(params: {
   ctaLabel?: string;
   ctaHref?: string;
 }): string {
-  const siteUrl = getSiteUrl();
+  const siteUrl = getEmailSiteUrl();
   const ctaBlock =
     params.ctaLabel && params.ctaHref
       ? `<p style="margin:32px 0 0;">

@@ -1,7 +1,7 @@
 import "server-only";
 
 import { BRAND_NAME } from "@/lib/legal/constants";
-import { getSiteUrl } from "@/lib/env/public";
+import { getEmailSiteUrl } from "@/lib/env/public";
 import {
   EmailBadge,
   EmailButton,
@@ -64,7 +64,7 @@ export function OrderConfirmationEmail({
   const name = customerName.trim() || "Customer";
   const resolvedPreview =
     previewText ?? `Your ${BRAND_NAME} order ${orderRef} is confirmed.`;
-  const siteUrl = getSiteUrl();
+  const siteUrl = getEmailSiteUrl();
   const shippingLines = shippingAddress
     ? formatShippingAddress(shippingAddress)
     : null;

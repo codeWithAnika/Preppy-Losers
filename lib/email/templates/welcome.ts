@@ -1,5 +1,5 @@
 import { BRAND_NAME } from "@/lib/legal/constants";
-import { getSiteUrl } from "@/lib/env/public";
+import { getEmailSiteUrl } from "@/lib/env/public";
 import { wrapEmailHtml } from "@/lib/email/templates/base";
 
 export function buildWelcomeEmailHtml(customerName: string): string {
@@ -21,7 +21,7 @@ export function buildWelcomeEmailHtml(customerName: string): string {
       </p>
     `,
     ctaLabel: "Shop the drop",
-    ctaHref: `${getSiteUrl()}/shop`,
+    ctaHref: `${getEmailSiteUrl()}/shop`,
   });
 }
 
