@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -14,7 +14,7 @@ import { PromoCodeSection } from "@/components/checkout/PromoCodeSection";
 import { MagneticGlitchButton } from "@/components/ui/MagneticGlitchButton";
 import { createClient } from "@/lib/supabase/client";
 import { useCartStore } from "@/lib/cart-store";
-import type { AppliedPromo } from "@/lib/promo";
+import type { AppliedPromo } from "@/lib/promo.types";
 import {
   formatINR,
   getCartValidationError,
@@ -126,9 +126,17 @@ export function CheckoutForm({
     setMounted(true);
   }, []);
 
+  const cartFingerprint = useMemo(
+    () =>
+      items
+        .map((item) => `${item.productId}:${item.size}:${item.quantity}:${item.price}`)
+        .join("|"),
+    [items]
+  );
+
   useEffect(() => {
     setAppliedPromo(null);
-  }, [items]);
+  }, [cartFingerprint]);
 
   useEffect(() => {
     if (selection.type === "saved") {

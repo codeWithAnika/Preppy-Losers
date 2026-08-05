@@ -4,13 +4,13 @@ import { useState } from "react";
 import type { CartItem } from "@/lib/cart";
 import { formatINR } from "@/lib/cart";
 import { createClient } from "@/lib/supabase/client";
-import type { AppliedPromo } from "@/lib/promo";
+import type { AppliedPromo } from "@/lib/promo.types";
 import {
   getValidatePromoErrorMessage,
   invokeValidatePromo,
+  logAppliedPromo,
   toAppliedPromo,
 } from "@/lib/promo";
-import { MagneticGlitchButton } from "@/components/ui/MagneticGlitchButton";
 
 interface PromoCodeSectionProps {
   items: CartItem[];
@@ -18,6 +18,16 @@ interface PromoCodeSectionProps {
   onApplied: (promo: AppliedPromo) => void;
   onRemoved: () => void;
   disabled?: boolean;
+}
+
+const PROMO_CODE_MAX_LENGTH = 20;
+
+function sanitizePromoInput(raw: string): string {
+  return raw
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "")
+    .slice(0, PROMO_CODE_MAX_LENGTH);
 }
 
 export function PromoCodeSection({
@@ -33,9 +43,14 @@ export function PromoCodeSection({
   const [error, setError] = useState<string | null>(null);
 
   const handleApply = async () => {
-    const trimmed = code.trim();
-    if (!trimmed) {
+    const normalizedCode = sanitizePromoInput(code);
+    if (!normalizedCode) {
       setError("Enter a promo code.");
+      return;
+    }
+
+    if (items.length === 0) {
+      setError("Your cart is empty.");
       return;
     }
 
@@ -45,7 +60,7 @@ export function PromoCodeSection({
     try {
       const { data, error: invokeError } = await invokeValidatePromo(
         supabase,
-        trimmed,
+        normalizedCode,
         items
       );
 
@@ -55,6 +70,7 @@ export function PromoCodeSection({
         return;
       }
 
+      logAppliedPromo(applied);
       onApplied(applied);
       setCode("");
     } catch {
@@ -82,7 +98,8 @@ export function PromoCodeSection({
               Code: <span className="font-mono">{appliedPromo.promoCode}</span>
             </p>
             <p className="mt-1 text-sm text-foreground">
-              Discount: <span className="text-emerald-400/90">-{formatINR(appliedPromo.discount)}</span>
+              Discount:{" "}
+              <span className="text-emerald-400/90">-{formatINR(appliedPromo.discount)}</span>
             </p>
           </div>
           <button
@@ -107,22 +124,28 @@ export function PromoCodeSection({
         <input
           type="text"
           value={code}
-          onChange={(event) => setCode(event.target.value.toUpperCase())}
-          placeholder="Enter code"
+          onChange={(event) => setCode(sanitizePromoInput(event.target.value))}
+          placeholder="Example: WELCOME5"
+          maxLength={PROMO_CODE_MAX_LENGTH}
           disabled={disabled || loading}
           className="min-w-0 flex-1 border border-white/10 bg-transparent px-3 py-2 text-sm uppercase tracking-wide text-foreground placeholder:normal-case placeholder:tracking-normal placeholder:text-muted focus:border-white/25 focus:outline-none disabled:opacity-50"
           autoComplete="off"
           spellCheck={false}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              void handleApply();
+            }
+          }}
         />
-        <MagneticGlitchButton
+        <button
           type="button"
-          variant="outline"
           onClick={() => void handleApply()}
           disabled={disabled || loading || !code.trim()}
-          className="shrink-0 px-4"
+          className="shrink-0 border border-foreground px-4 py-2 text-xs uppercase tracking-[0.2em] text-foreground transition-colors hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:border-white/15 disabled:text-foreground/30"
         >
-          {loading ? "..." : "Apply"}
-        </MagneticGlitchButton>
+          {loading ? "Applying…" : "Apply"}
+        </button>
       </div>
       {error && (
         <p className="mt-2 text-xs text-accent" role="alert">

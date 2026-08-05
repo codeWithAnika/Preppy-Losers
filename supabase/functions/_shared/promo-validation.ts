@@ -153,7 +153,7 @@ export async function validatePromoForSubtotal(
   const { data, error } = await supabase
     .from("promo_codes")
     .select("*")
-    .eq("code", code)
+    .ilike("code", code)
     .maybeSingle();
 
   if (error) {
