@@ -3,6 +3,7 @@
 import * as Sentry from "@sentry/nextjs";
 import { useEffect } from "react";
 import { BrandWordmark } from "@/components/BrandWordmark";
+import { LitePageTransitionProvider } from "@/components/LitePageTransitionProvider";
 import { MagneticGlitchCTA } from "@/components/ui/MagneticGlitchCTA";
 
 export default function GlobalError({
@@ -26,18 +27,20 @@ export default function GlobalError({
         <p className="mb-10 max-w-md text-sm text-foreground/60">
           An unexpected error occurred. Our team has been notified.
         </p>
-        <div className="flex flex-wrap justify-center gap-4">
-          <MagneticGlitchCTA href="/" variant="outline">
-            Back to home
-          </MagneticGlitchCTA>
-          <button
-            type="button"
-            onClick={() => reset()}
-            className="inline-flex min-h-11 items-center border border-white/20 px-6 text-xs uppercase tracking-[0.2em] transition-colors hover:border-white/40"
-          >
-            Try again
-          </button>
-        </div>
+        <LitePageTransitionProvider>
+          <div className="flex flex-wrap justify-center gap-4">
+            <MagneticGlitchCTA href="/" variant="outline">
+              Back to home
+            </MagneticGlitchCTA>
+            <button
+              type="button"
+              onClick={() => reset()}
+              className="inline-flex min-h-11 items-center border border-white/20 px-6 text-xs uppercase tracking-[0.2em] transition-colors hover:border-white/40"
+            >
+              Try again
+            </button>
+          </div>
+        </LitePageTransitionProvider>
       </body>
     </html>
   );
