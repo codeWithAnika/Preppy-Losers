@@ -14,6 +14,15 @@ export function formatAdminDate(dateString: string): string {
   }).format(new Date(dateString));
 }
 
+/** DD MMM YYYY — e.g. 06 Aug 2026 */
+export function formatPromoDate(dateString: string): string {
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(new Date(dateString));
+}
+
 export function formatAdminDateTime(dateString: string): string {
   return new Intl.DateTimeFormat("en-IN", {
     month: "short",

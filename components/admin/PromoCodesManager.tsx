@@ -1,16 +1,31 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import { Plus } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useAdminToast } from "@/components/admin/AdminProviders";
 import { ConfirmDialog } from "@/components/admin/ConfirmDialog";
-import { formatAdminDate } from "@/lib/admin/format";
+import { formatPromoDate } from "@/lib/admin/format";
 import {
   createPromoCodeAction,
   deletePromoCodeAction,
   togglePromoCodeActiveAction,
   updatePromoCodeAction,
 } from "@/lib/admin/actions/promo-codes";
+import {
+  combineDateTime,
+  dateFieldsFromIso,
+  EMPTY_DATE_FIELDS,
+  formatPromoDiscountLabel,
+  formatPromoUsage,
+  formatPromoValidity,
+  mapDuplicateCodeError,
+  PROMO_CODE_MAX_LENGTH,
+  sanitizePromoCodeInput,
+  validatePromoForm,
+  type PromoDateFields,
+  type PromoFormErrors,
+} from "@/lib/admin/promo-form-utils";
 import type { AdminPromoCodeRow, PromoCodeFormInput } from "@/lib/admin/types";
 import {
   isPromoExpired,
@@ -33,19 +48,6 @@ const EMPTY_FORM: PromoCodeFormInput = {
   startsAt: null,
   expiresAt: null,
 };
-
-function toDatetimeLocal(value: string | null): string {
-  if (!value) return "";
-  const date = new Date(value);
-  const offset = date.getTimezoneOffset();
-  const local = new Date(date.getTime() - offset * 60_000);
-  return local.toISOString().slice(0, 16);
-}
-
-function fromDatetimeLocal(value: string): string | null {
-  if (!value.trim()) return null;
-  return new Date(value).toISOString();
-}
 
 function rowToForm(row: AdminPromoCodeRow): PromoCodeFormInput {
   return {
@@ -71,9 +73,20 @@ function getPromoStatus(row: AdminPromoCodeRow): string {
   return "Active";
 }
 
-function getRemainingUses(row: AdminPromoCodeRow): string {
-  if (row.max_uses === null) return "Unlimited";
-  return String(Math.max(0, row.max_uses - row.used_count));
+function getStatusBadgeClass(status: string): string {
+  if (status === "Active") return "admin-badge--accent";
+  if (status === "Scheduled") return "admin-badge--pending";
+  if (status === "Expired" || status === "Limit reached") {
+    return "admin-badge--archived";
+  }
+  return "";
+}
+
+function parseOptionalInt(value: string): number | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 export function PromoCodesManager({ promoCodes }: PromoCodesManagerProps) {
@@ -82,6 +95,8 @@ export function PromoCodesManager({ promoCodes }: PromoCodesManagerProps) {
   const [pending, startTransition] = useTransition();
   const [formOpen, setFormOpen] = useState(false);
   const [form, setForm] = useState<PromoCodeFormInput>(EMPTY_FORM);
+  const [dateFields, setDateFields] = useState<PromoDateFields>(EMPTY_DATE_FIELDS);
+  const [errors, setErrors] = useState<PromoFormErrors>({});
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const editing = Boolean(form.id);
@@ -94,34 +109,65 @@ export function PromoCodesManager({ promoCodes }: PromoCodesManagerProps) {
     [promoCodes]
   );
 
+  const discountValueLabel =
+    form.type === "percentage" ? "Discount Percentage (%)" : "Discount Amount (₹)";
+
   const openCreate = () => {
     setForm(EMPTY_FORM);
+    setDateFields(EMPTY_DATE_FIELDS);
+    setErrors({});
     setFormOpen(true);
   };
 
   const openEdit = (row: AdminPromoCodeRow) => {
     setForm(rowToForm(row));
+    setDateFields(dateFieldsFromIso(row.starts_at, row.expires_at));
+    setErrors({});
     setFormOpen(true);
   };
 
   const closeForm = () => {
     setFormOpen(false);
     setForm(EMPTY_FORM);
+    setDateFields(EMPTY_DATE_FIELDS);
+    setErrors({});
   };
 
+  const buildSubmitPayload = (): PromoCodeFormInput => ({
+    ...form,
+    code: sanitizePromoCodeInput(form.code),
+    startsAt: combineDateTime(dateFields.startDate, dateFields.startTime),
+    expiresAt: combineDateTime(dateFields.expiryDate, dateFields.expiryTime),
+  });
+
   const handleSubmit = () => {
+    const payload = buildSubmitPayload();
+    const nextErrors = validatePromoForm(payload, promoCodes, form.id);
+    setErrors(nextErrors);
+
+    if (Object.keys(nextErrors).length > 0) {
+      return;
+    }
+
     startTransition(async () => {
       const result = editing
-        ? await updatePromoCodeAction(form)
-        : await createPromoCodeAction(form);
+        ? await updatePromoCodeAction(payload)
+        : await createPromoCodeAction(payload);
 
       if (result.success) {
         toast(editing ? "Promo code updated" : "Promo code created", "success");
         closeForm();
         router.refresh();
-      } else {
-        toast(result.error, "error");
+        return;
       }
+
+      const duplicateMessage = mapDuplicateCodeError(result.error);
+      if (duplicateMessage) {
+        setErrors((current) => ({ ...current, code: duplicateMessage }));
+        return;
+      }
+
+      toast(result.error, "error");
     });
   };
 
@@ -152,261 +198,433 @@ export function PromoCodesManager({ promoCodes }: PromoCodesManagerProps) {
     });
   };
 
+  const updateExpiryDate = (expiryDate: string) => {
+    setDateFields((current) => ({ ...current, expiryDate }));
+    if (dateFields.startDate && expiryDate && expiryDate < dateFields.startDate) {
+      setErrors((current) => ({
+        ...current,
+        expiresAt: "Expiry date must be on or after the start date.",
+      }));
+    } else {
+      setErrors((current) => ({ ...current, expiresAt: undefined }));
+    }
+  };
+
   return (
     <div className="admin-promo-codes">
-      <div className="admin-toolbar">
-        <button
-          type="button"
-          className="admin-btn admin-btn--primary"
-          onClick={openCreate}
-          disabled={pending}
-        >
-          Create promo code
-        </button>
-      </div>
+      {sortedCodes.length > 0 ? (
+        <div className="admin-toolbar">
+          <button
+            type="button"
+            className="admin-btn admin-btn--primary"
+            onClick={openCreate}
+            disabled={pending}
+          >
+            <Plus size={16} strokeWidth={1.75} />
+            Create Promo Code
+          </button>
+        </div>
+      ) : null}
 
-      <div className="admin-table-wrap">
-        <table className="admin-table">
-          <thead>
-            <tr>
-              <th>Code</th>
-              <th>Type</th>
-              <th>Value</th>
-              <th>Min order</th>
-              <th>Max discount</th>
-              <th>Max uses</th>
-              <th>Used</th>
-              <th>Remaining</th>
-              <th>Status</th>
-              <th>Starts</th>
-              <th>Expires</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {sortedCodes.length === 0 ? (
+      {sortedCodes.length === 0 ? (
+        <div className="admin-promo-empty">
+          <h2>No promo codes created yet</h2>
+          <p>Create your first discount code for customers.</p>
+          <button
+            type="button"
+            className="admin-btn admin-btn--primary"
+            onClick={openCreate}
+            disabled={pending}
+          >
+            <Plus size={16} strokeWidth={1.75} />
+            Create Promo Code
+          </button>
+        </div>
+      ) : (
+        <div className="admin-table-wrap">
+          <table className="admin-table">
+            <thead>
               <tr>
-                <td colSpan={12} className="admin-muted">
-                  No promo codes yet.
-                </td>
+                <th>Code</th>
+                <th>Discount</th>
+                <th>Minimum Order</th>
+                <th>Usage</th>
+                <th>Status</th>
+                <th>Validity</th>
+                <th>Actions</th>
               </tr>
-            ) : (
-              sortedCodes.map((row) => (
-                <tr key={row.id}>
-                  <td>
-                    <code>{row.code}</code>
-                  </td>
-                  <td>{row.type}</td>
-                  <td>
-                    {row.type === "percentage" ? `${row.value}%` : `₹${row.value}`}
-                  </td>
-                  <td>₹{row.minimum_order}</td>
-                  <td>
-                    {row.maximum_discount === null ? "—" : `₹${row.maximum_discount}`}
-                  </td>
-                  <td>{row.max_uses ?? "—"}</td>
-                  <td>{row.used_count}</td>
-                  <td>{getRemainingUses(row)}</td>
-                  <td>
-                    <span
-                      className={`admin-badge ${
-                        getPromoStatus(row) === "Active" ? "admin-badge--accent" : ""
-                      }`}
-                    >
-                      {getPromoStatus(row)}
-                    </span>
-                  </td>
-                  <td>{row.starts_at ? formatAdminDate(row.starts_at) : "—"}</td>
-                  <td>{row.expires_at ? formatAdminDate(row.expires_at) : "—"}</td>
-                  <td>
-                    <div className="admin-table__actions">
-                      <button
-                        type="button"
-                        className="admin-btn admin-btn--ghost"
-                        disabled={pending}
-                        onClick={() => openEdit(row)}
-                      >
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        className="admin-btn admin-btn--ghost"
-                        disabled={pending}
-                        onClick={() => handleToggleActive(row)}
-                      >
-                        {row.active ? "Disable" : "Enable"}
-                      </button>
-                      <button
-                        type="button"
-                        className="admin-btn admin-btn--ghost"
-                        disabled={pending}
-                        onClick={() => setDeleteId(row.id)}
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {sortedCodes.map((row) => {
+                const status = getPromoStatus(row);
+
+                return (
+                  <tr key={row.id}>
+                    <td>
+                      <span className="admin-promo-code">{row.code}</span>
+                    </td>
+                    <td>
+                      <strong>{formatPromoDiscountLabel(row)}</strong>
+                      {row.type === "percentage" && row.maximum_discount !== null ? (
+                        <span className="admin-table__sub">
+                          Cap ₹{Number(row.maximum_discount)}
+                        </span>
+                      ) : null}
+                    </td>
+                    <td>Min ₹{Number(row.minimum_order)}</td>
+                    <td>{formatPromoUsage(row)}</td>
+                    <td>
+                      <span className={`admin-badge ${getStatusBadgeClass(status)}`}>
+                        {status}
+                      </span>
+                    </td>
+                    <td>
+                      {formatPromoValidity(row.starts_at, row.expires_at, formatPromoDate)}
+                    </td>
+                    <td>
+                      <div className="admin-table__actions">
+                        <button
+                          type="button"
+                          className="admin-btn admin-btn--ghost"
+                          disabled={pending}
+                          onClick={() => openEdit(row)}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          className="admin-btn admin-btn--ghost"
+                          disabled={pending}
+                          onClick={() => handleToggleActive(row)}
+                        >
+                          {row.active ? "Disable" : "Enable"}
+                        </button>
+                        <button
+                          type="button"
+                          className="admin-btn admin-btn--ghost"
+                          disabled={pending}
+                          onClick={() => setDeleteId(row.id)}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {formOpen ? (
-        <div className="admin-modal-backdrop" role="presentation">
-          <div className="admin-modal" role="dialog" aria-modal="true">
-            <div className="admin-modal__head">
-              <h2>{editing ? "Edit promo code" : "Create promo code"}</h2>
-              <button type="button" className="admin-btn admin-btn--ghost" onClick={closeForm}>
-                Close
+        <div
+          className="admin-dialog-backdrop"
+          role="presentation"
+          onClick={closeForm}
+        >
+          <div
+            className="admin-dialog admin-dialog--promo"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="promo-form-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="admin-dialog__header">
+              <div>
+                <p className="admin-page__kicker">Commerce</p>
+                <h2 id="promo-form-title" className="admin-dialog__title">
+                  {editing ? "Edit promo code" : "Create promo code"}
+                </h2>
+              </div>
+            </div>
+
+            <div className="admin-dialog__body">
+              <section className="admin-form-section">
+                <h2 className="admin-form-section__title">Promo Code Details</h2>
+
+                <label className="admin-field">
+                  <span>Code</span>
+                  <input
+                    className={`admin-input admin-input--code${
+                      errors.code ? " admin-input--error" : ""
+                    }`}
+                    value={form.code}
+                    maxLength={PROMO_CODE_MAX_LENGTH}
+                    placeholder="Example: WELCOME5"
+                    autoComplete="off"
+                    spellCheck={false}
+                    onChange={(event) => {
+                      setForm((prev) => ({
+                        ...prev,
+                        code: sanitizePromoCodeInput(event.target.value),
+                      }));
+                      setErrors((prev) => ({ ...prev, code: undefined }));
+                    }}
+                  />
+                  {errors.code ? (
+                    <span className="admin-field-error" role="alert">
+                      {errors.code}
+                    </span>
+                  ) : (
+                    <span className="admin-field-hint">
+                      Letters and numbers only, up to {PROMO_CODE_MAX_LENGTH} characters.
+                    </span>
+                  )}
+                </label>
+
+                <div className="admin-form-row">
+                  <label className="admin-field">
+                    <span>Discount Type</span>
+                    <select
+                      className="admin-select"
+                      value={form.type}
+                      onChange={(event) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          type: event.target.value as PromoCodeFormInput["type"],
+                        }))
+                      }
+                    >
+                      <option value="percentage">Percentage</option>
+                      <option value="fixed">Fixed amount</option>
+                    </select>
+                  </label>
+
+                  <label className="admin-field">
+                    <span>{discountValueLabel}</span>
+                    <input
+                      className={`admin-input${errors.value ? " admin-input--error" : ""}`}
+                      type="number"
+                      min={1}
+                      max={form.type === "percentage" ? 100 : undefined}
+                      step={form.type === "percentage" ? 1 : 1}
+                      value={form.value}
+                      onChange={(event) => {
+                        setForm((prev) => ({
+                          ...prev,
+                          value: Number(event.target.value),
+                        }));
+                        setErrors((prev) => ({ ...prev, value: undefined }));
+                      }}
+                      required
+                    />
+                    {errors.value ? (
+                      <span className="admin-field-error" role="alert">
+                        {errors.value}
+                      </span>
+                    ) : null}
+                  </label>
+                </div>
+              </section>
+
+              <section className="admin-form-section">
+                <h2 className="admin-form-section__title">Order Rules</h2>
+
+                <div className="admin-form-row">
+                  <label className="admin-field">
+                    <span>Minimum Order</span>
+                    <input
+                      className={`admin-input${
+                        errors.minimumOrder ? " admin-input--error" : ""
+                      }`}
+                      type="number"
+                      min={0}
+                      value={form.minimumOrder}
+                      placeholder="₹0"
+                      onChange={(event) => {
+                        setForm((prev) => ({
+                          ...prev,
+                          minimumOrder: Number(event.target.value),
+                        }));
+                        setErrors((prev) => ({ ...prev, minimumOrder: undefined }));
+                      }}
+                    />
+                    {errors.minimumOrder ? (
+                      <span className="admin-field-error" role="alert">
+                        {errors.minimumOrder}
+                      </span>
+                    ) : null}
+                  </label>
+
+                  <label className="admin-field">
+                    <span>Maximum Discount</span>
+                    <input
+                      className={`admin-input${
+                        errors.maximumDiscount ? " admin-input--error" : ""
+                      }`}
+                      type="number"
+                      min={0}
+                      value={form.maximumDiscount ?? ""}
+                      placeholder="Optional"
+                      disabled={form.type === "fixed"}
+                      onChange={(event) => {
+                        setForm((prev) => ({
+                          ...prev,
+                          maximumDiscount: parseOptionalInt(event.target.value),
+                        }));
+                        setErrors((prev) => ({ ...prev, maximumDiscount: undefined }));
+                      }}
+                    />
+                    {form.type === "fixed" ? (
+                      <span className="admin-field-hint">
+                        Maximum discount applies to percentage codes only.
+                      </span>
+                    ) : errors.maximumDiscount ? (
+                      <span className="admin-field-error" role="alert">
+                        {errors.maximumDiscount}
+                      </span>
+                    ) : (
+                      <span className="admin-field-hint">Optional cap in rupees.</span>
+                    )}
+                  </label>
+                </div>
+              </section>
+
+              <section className="admin-form-section">
+                <h2 className="admin-form-section__title">Usage Limits</h2>
+
+                <label className="admin-field">
+                  <span>Maximum Uses</span>
+                  <input
+                    className={`admin-input${errors.maxUses ? " admin-input--error" : ""}`}
+                    type="number"
+                    min={1}
+                    value={form.maxUses ?? ""}
+                    placeholder="Unlimited"
+                    onChange={(event) => {
+                      setForm((prev) => ({
+                        ...prev,
+                        maxUses: parseOptionalInt(event.target.value),
+                      }));
+                      setErrors((prev) => ({ ...prev, maxUses: undefined }));
+                    }}
+                  />
+                  {errors.maxUses ? (
+                    <span className="admin-field-error" role="alert">
+                      {errors.maxUses}
+                    </span>
+                  ) : (
+                    <span className="admin-field-hint">Leave empty for unlimited uses.</span>
+                  )}
+                </label>
+              </section>
+
+              <section className="admin-form-section">
+                <h2 className="admin-form-section__title">Schedule</h2>
+
+                <label className="admin-field">
+                  <span>Start Date</span>
+                  <div className="admin-date-row">
+                    <input
+                      className="admin-input"
+                      type="date"
+                      value={dateFields.startDate}
+                      onChange={(event) => {
+                        const startDate = event.target.value;
+                        setDateFields((current) => ({ ...current, startDate }));
+                        if (
+                          dateFields.expiryDate &&
+                          startDate &&
+                          dateFields.expiryDate < startDate
+                        ) {
+                          setErrors((current) => ({
+                            ...current,
+                            expiresAt:
+                              "Expiry date must be on or after the start date.",
+                          }));
+                        } else {
+                          setErrors((current) => ({ ...current, expiresAt: undefined }));
+                        }
+                      }}
+                    />
+                    <input
+                      className="admin-input"
+                      type="time"
+                      value={dateFields.startTime}
+                      placeholder="Optional time"
+                      onChange={(event) =>
+                        setDateFields((current) => ({
+                          ...current,
+                          startTime: event.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                  <span className="admin-field-hint">Time is optional. Leave blank for midnight.</span>
+                </label>
+
+                <label className="admin-field">
+                  <span>Expiry Date</span>
+                  <div className="admin-date-row">
+                    <input
+                      className={`admin-input${
+                        errors.expiresAt ? " admin-input--error" : ""
+                      }`}
+                      type="date"
+                      min={dateFields.startDate || undefined}
+                      value={dateFields.expiryDate}
+                      onChange={(event) => updateExpiryDate(event.target.value)}
+                    />
+                    <input
+                      className="admin-input"
+                      type="time"
+                      value={dateFields.expiryTime}
+                      onChange={(event) =>
+                        setDateFields((current) => ({
+                          ...current,
+                          expiryTime: event.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+                  {errors.expiresAt ? (
+                    <span className="admin-field-error" role="alert">
+                      {errors.expiresAt}
+                    </span>
+                  ) : (
+                    <span className="admin-field-hint">
+                      Displayed as DD MMM YYYY in the table.
+                    </span>
+                  )}
+                </label>
+              </section>
+
+              <section className="admin-form-section">
+                <h2 className="admin-form-section__title">Status</h2>
+                <label className="admin-check">
+                  <input
+                    type="checkbox"
+                    checked={form.active}
+                    onChange={(event) =>
+                      setForm((prev) => ({ ...prev, active: event.target.checked }))
+                    }
+                  />
+                  <span>Active</span>
+                </label>
+              </section>
+            </div>
+
+            <div className="admin-dialog__actions">
+              <button
+                type="button"
+                className="admin-btn admin-btn--ghost"
+                disabled={pending}
+                onClick={closeForm}
+              >
+                Cancel
               </button>
-            </div>
-
-            <div className="admin-form-grid">
-              <label className="admin-field">
-                <span>Code</span>
-                <input
-                  value={form.code}
-                  onChange={(event) =>
-                    setForm((prev) => ({
-                      ...prev,
-                      code: event.target.value.toUpperCase(),
-                    }))
-                  }
-                  required
-                />
-              </label>
-
-              <label className="admin-field">
-                <span>Type</span>
-                <select
-                  value={form.type}
-                  onChange={(event) =>
-                    setForm((prev) => ({
-                      ...prev,
-                      type: event.target.value as PromoCodeFormInput["type"],
-                    }))
-                  }
-                >
-                  <option value="percentage">Percentage</option>
-                  <option value="fixed">Fixed amount</option>
-                </select>
-              </label>
-
-              <label className="admin-field">
-                <span>Value</span>
-                <input
-                  type="number"
-                  min={1}
-                  value={form.value}
-                  onChange={(event) =>
-                    setForm((prev) => ({
-                      ...prev,
-                      value: Number(event.target.value),
-                    }))
-                  }
-                  required
-                />
-              </label>
-
-              <label className="admin-field">
-                <span>Minimum order (₹)</span>
-                <input
-                  type="number"
-                  min={0}
-                  value={form.minimumOrder}
-                  onChange={(event) =>
-                    setForm((prev) => ({
-                      ...prev,
-                      minimumOrder: Number(event.target.value),
-                    }))
-                  }
-                />
-              </label>
-
-              <label className="admin-field">
-                <span>Maximum discount (₹)</span>
-                <input
-                  type="number"
-                  min={0}
-                  value={form.maximumDiscount ?? ""}
-                  onChange={(event) =>
-                    setForm((prev) => ({
-                      ...prev,
-                      maximumDiscount:
-                        event.target.value === "" ? null : Number(event.target.value),
-                    }))
-                  }
-                  placeholder="Optional"
-                />
-              </label>
-
-              <label className="admin-field">
-                <span>Maximum uses</span>
-                <input
-                  type="number"
-                  min={1}
-                  value={form.maxUses ?? ""}
-                  onChange={(event) =>
-                    setForm((prev) => ({
-                      ...prev,
-                      maxUses:
-                        event.target.value === "" ? null : Number(event.target.value),
-                    }))
-                  }
-                  placeholder="Unlimited"
-                />
-              </label>
-
-              <label className="admin-field">
-                <span>Start date</span>
-                <input
-                  type="datetime-local"
-                  value={toDatetimeLocal(form.startsAt)}
-                  onChange={(event) =>
-                    setForm((prev) => ({
-                      ...prev,
-                      startsAt: fromDatetimeLocal(event.target.value),
-                    }))
-                  }
-                />
-              </label>
-
-              <label className="admin-field">
-                <span>Expiry date</span>
-                <input
-                  type="datetime-local"
-                  value={toDatetimeLocal(form.expiresAt)}
-                  onChange={(event) =>
-                    setForm((prev) => ({
-                      ...prev,
-                      expiresAt: fromDatetimeLocal(event.target.value),
-                    }))
-                  }
-                />
-              </label>
-
-              <label className="admin-field admin-field--checkbox">
-                <input
-                  type="checkbox"
-                  checked={form.active}
-                  onChange={(event) =>
-                    setForm((prev) => ({ ...prev, active: event.target.checked }))
-                  }
-                />
-                <span>Active</span>
-              </label>
-            </div>
-
-            <div className="admin-modal__actions">
               <button
                 type="button"
                 className="admin-btn admin-btn--primary"
                 disabled={pending}
                 onClick={handleSubmit}
               >
-                {editing ? "Save changes" : "Create promo code"}
+                {pending
+                  ? "Saving…"
+                  : editing
+                    ? "Save Changes"
+                    : "Create Promo Code"}
               </button>
             </div>
           </div>
