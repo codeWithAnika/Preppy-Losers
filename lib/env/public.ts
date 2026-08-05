@@ -20,27 +20,25 @@ export function getSiteUrl(): string {
 
 /**
  * Canonical site URL for customer-facing transactional emails.
- * Ignores preview/deploy hosts (e.g. *.vercel.app) so links always use production.
+ * Always resolves to production — never localhost, Vercel preview, or deploy URLs.
  */
 export function getEmailSiteUrl(): string {
   const fromEnv = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "");
 
   if (fromEnv) {
     try {
-      const { hostname } = new URL(fromEnv);
-      if (isProductionSiteHostname(hostname)) {
-        return fromEnv;
+      const parsed = new URL(
+        fromEnv.startsWith("http") ? fromEnv : `https://${fromEnv}`
+      );
+      if (isProductionSiteHostname(parsed.hostname)) {
+        return parsed.origin;
       }
     } catch {
-      // Fall through to safe defaults below.
+      // Fall through to production default.
     }
   }
 
-  if (process.env.NODE_ENV === "production") {
-    return PRODUCTION_SITE_URL;
-  }
-
-  return fromEnv ?? "http://localhost:3000";
+  return PRODUCTION_SITE_URL;
 }
 
 export function getAllowedOrigins(): string[] {

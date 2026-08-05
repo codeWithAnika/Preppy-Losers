@@ -5,6 +5,7 @@ import type {
   AdminOrderRow,
   AdminOrderWithCustomer,
   AdminProductRow,
+  AdminPromoCodeRow,
   ChartPoint,
   DashboardStats,
   StockAlert,
@@ -168,6 +169,17 @@ function ordersByDay(orders: AdminOrderRow[], days: number): ChartPoint[] {
   }
 
   return labels.map((label) => ({ label, value: map.get(label) ?? 0 }));
+}
+
+export async function fetchAdminPromoCodes(): Promise<AdminPromoCodeRow[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("promo_codes")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  if (error) throw new Error(error.message);
+  return (data ?? []) as AdminPromoCodeRow[];
 }
 
 export async function fetchDashboardStats(): Promise<DashboardStats> {

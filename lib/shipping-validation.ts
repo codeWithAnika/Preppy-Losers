@@ -1,4 +1,6 @@
-export interface ShippingAddressPayload {
+/** Shared shipping address validation for checkout (client + server actions). */
+
+export interface ShippingAddressFields {
   fullName?: string;
   line1: string;
   line2?: string;
@@ -13,11 +15,12 @@ const MAX_NAME_LENGTH = 120;
 const MAX_LINE_LENGTH = 200;
 const MAX_CITY_LENGTH = 80;
 
-function normalizePhoneDigits(phone: string): string {
+export function normalizePhoneDigits(phone: string): string {
   return phone.replace(/\D/g, "");
 }
 
-function isValidPhone(phone: string): boolean {
+/** Indian mobile: 10 digits starting 6–9, or +91 prefix. */
+export function isValidPhone(phone: string): boolean {
   const digits = normalizePhoneDigits(phone);
   if (digits.length === 10) {
     return /^[6-9]\d{9}$/.test(digits);
@@ -28,11 +31,15 @@ function isValidPhone(phone: string): boolean {
   return false;
 }
 
-/** Normalize client shipping input into a complete order snapshot (stored on orders). */
-export function normalizeShippingSnapshot(
-  address: ShippingAddressPayload
-): ShippingAddressPayload {
-  const fullName = address.fullName?.trim().slice(0, MAX_NAME_LENGTH);
+export function normalizeShippingAddressInput(
+  address: ShippingAddressFields,
+  fallbackFullName = ""
+): ShippingAddressFields {
+  const fullName = (address.fullName?.trim() || fallbackFullName.trim()).slice(
+    0,
+    MAX_NAME_LENGTH
+  );
+
   return {
     fullName: fullName || undefined,
     line1: address.line1.trim().slice(0, MAX_LINE_LENGTH),
@@ -46,8 +53,8 @@ export function normalizeShippingSnapshot(
 }
 
 export function isValidShippingAddress(
-  address: ShippingAddressPayload | null | undefined
-): address is ShippingAddressPayload {
+  address: ShippingAddressFields | null | undefined
+): boolean {
   if (!address) return false;
 
   const fullName = address.fullName?.trim() ?? "";
@@ -66,17 +73,32 @@ export function isValidShippingAddress(
   );
 }
 
-/** Backfill missing snapshot fields from a newer client payload (e.g. legacy sessions). */
-export function mergeShippingSnapshot(
-  primary: ShippingAddressPayload,
-  fallback: ShippingAddressPayload
-): ShippingAddressPayload {
-  const merged: ShippingAddressPayload = {
-    ...primary,
-    fullName: primary.fullName?.trim() || fallback.fullName?.trim() || undefined,
-    line2: primary.line2?.trim() || fallback.line2?.trim() || undefined,
-    country: primary.country?.trim() || fallback.country?.trim() || "India",
-  };
+export function getShippingAddressError(
+  address: ShippingAddressFields,
+  fallbackFullName = ""
+): string | null {
+  const normalized = normalizeShippingAddressInput(address, fallbackFullName);
 
-  return normalizeShippingSnapshot(merged);
+  if (isValidShippingAddress(normalized)) {
+    return null;
+  }
+
+  const fullName = normalized.fullName?.trim() ?? "";
+  if (fullName.length < 2) {
+    return "Please enter your full name.";
+  }
+  if (normalized.line1.trim().length < 3) {
+    return "Please enter a complete street address.";
+  }
+  if (normalized.city.trim().length < 2 || normalized.state.trim().length < 2) {
+    return "Please enter your city and state.";
+  }
+  if (!/^\d{6}$/.test(normalized.pincode.trim())) {
+    return "Enter a valid 6-digit pincode.";
+  }
+  if (!isValidPhone(normalized.phone)) {
+    return "Enter a valid 10-digit Indian mobile number.";
+  }
+
+  return "Please enter a complete shipping address.";
 }

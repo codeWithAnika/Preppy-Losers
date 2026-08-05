@@ -1,5 +1,10 @@
 import { FunctionsHttpError, type SupabaseClient } from "@supabase/supabase-js";
 
+export {
+  isValidShippingAddress,
+  normalizeShippingAddressInput,
+} from "@/lib/shipping-validation";
+
 const VERIFY_MAX_ATTEMPTS = 3;
 const VERIFY_RETRY_DELAY_MS = 1200;
 const CREATE_ORDER_MAX_ATTEMPTS = 2;
@@ -24,6 +29,12 @@ export type PaymentErrorCode =
   | "PAYMENT_SESSION_NOT_CREATED"
   | "SERVER_ERROR"
   | "RAZORPAY_ERROR"
+  | "INVALID_CODE"
+  | "INACTIVE_CODE"
+  | "EXPIRED_CODE"
+  | "NOT_STARTED"
+  | "MINIMUM_NOT_MET"
+  | "USAGE_EXCEEDED"
   | "SERVER_UNAVAILABLE";
 
 export interface FunctionResponseBody {
@@ -39,6 +50,10 @@ export interface FunctionResponseBody {
   amount?: number;
   currency?: string;
   sessionVerified?: boolean;
+  subtotal?: number;
+  discount?: number;
+  promoCode?: string | null;
+  finalAmount?: number;
 }
 
 const USER_MESSAGES: Partial<Record<string, string>> = {
@@ -62,6 +77,12 @@ const USER_MESSAGES: Partial<Record<string, string>> = {
   SERVER_ERROR: "Server unavailable. Please try again.",
   RAZORPAY_ERROR: "Payment gateway error. Please try again.",
   SERVER_UNAVAILABLE: "Server unavailable. Please try again.",
+  INVALID_CODE: "Invalid promo code.",
+  INACTIVE_CODE: "This promo code is inactive.",
+  EXPIRED_CODE: "This promo code has expired.",
+  NOT_STARTED: "This promo code is not active yet.",
+  MINIMUM_NOT_MET: "Minimum order amount not reached for this code.",
+  USAGE_EXCEEDED: "This promo code has reached its usage limit.",
 };
 
 export function sleep(ms: number): Promise<void> {
@@ -170,22 +191,6 @@ export async function getFunctionErrorMessage(
   }
 
   return fallback;
-}
-
-export function isValidShippingAddress(address: {
-  line1: string;
-  city: string;
-  state: string;
-  pincode: string;
-  phone: string;
-}): boolean {
-  return (
-    address.line1.trim().length >= 3 &&
-    address.city.trim().length >= 2 &&
-    address.state.trim().length >= 2 &&
-    /^\d{6}$/.test(address.pincode.trim()) &&
-    address.phone.replace(/\s+/g, "").length >= 10
-  );
 }
 
 function isRetryableError(error: unknown): boolean {

@@ -1,9 +1,9 @@
 import { getAuthenticatedUser, getServiceRoleClient } from "../_shared/auth.ts";
+import type { ShippingAddressPayload } from "../_shared/address-validation.ts";
 import {
   isValidShippingAddress,
   normalizeShippingSnapshot,
 } from "../_shared/address-validation.ts";
-import { toFulfillmentItems } from "../_shared/fulfillment.ts";
 import { jsonResponse, okResponse } from "../_shared/http.ts";
 import { logPayment, logPaymentError } from "../_shared/logger.ts";
 import {
@@ -11,6 +11,11 @@ import {
   type CartItemPayload,
   validateOrderItems,
 } from "../_shared/order-validation.ts";
+import {
+  applyDiscountToLineAmounts,
+  normalizePromoCode,
+  validatePromoForSubtotal,
+} from "../_shared/promo-validation.ts";
 import { paymentError, verifyErrorResponse } from "../_shared/payment-errors.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 
@@ -18,14 +23,8 @@ interface CreateOrderBody {
   amount: number;
   currency?: string;
   items: CartItemPayload[];
-  shippingAddress: {
-    line1: string;
-    line2?: string;
-    city: string;
-    state: string;
-    pincode: string;
-    phone: string;
-  };
+  shippingAddress: ShippingAddressPayload;
+  promoCode?: string;
 }
 
 const SCOPE = "create-razorpay-order";
@@ -53,8 +52,13 @@ Deno.serve(async (req) => {
     step("user authenticated", { userId: user.id });
 
     const body = (await req.json()) as CreateOrderBody;
-    const { amount: clientAmountPaise, currency = "INR", items, shippingAddress } =
-      body;
+    const {
+      amount: clientAmountPaise,
+      currency = "INR",
+      items,
+      shippingAddress,
+      promoCode: rawPromoCode,
+    } = body;
 
     if (
       !clientAmountPaise ||
@@ -98,14 +102,58 @@ Deno.serve(async (req) => {
       );
     }
 
-    const amountMismatch = assertClientAmountMatches(
-      clientAmountPaise,
-      validation.order.totalPaise
-    );
+    const subtotalPaise = validation.order.totalPaise;
+    const subtotalRupee = validation.order.totalRupee;
+
+    let discountPaise = 0;
+    let finalPaise = subtotalPaise;
+    let appliedPromoCode: string | null = null;
+
+    const normalizedPromoCode = rawPromoCode
+      ? normalizePromoCode(rawPromoCode)
+      : "";
+
+    if (normalizedPromoCode) {
+      const promoResult = await validatePromoForSubtotal(
+        supabaseAdmin,
+        normalizedPromoCode,
+        subtotalRupee
+      );
+
+      if (!promoResult.ok) {
+        step("promo validation failed", {
+          code: promoResult.code,
+          error: promoResult.error,
+        });
+        return jsonResponse(
+          {
+            success: false,
+            code: promoResult.code,
+            error: promoResult.error,
+            message: promoResult.error,
+          },
+          400
+        );
+      }
+
+      discountPaise = promoResult.pricing.discountPaise;
+      finalPaise = promoResult.pricing.finalPaise;
+      appliedPromoCode = promoResult.pricing.promoCode;
+    }
+
+    if (finalPaise <= 0) {
+      step("invalid final amount after promo", { finalPaise, discountPaise });
+      const { body: errBody, status } = paymentError("INVALID_PAYLOAD", 400);
+      return jsonResponse(errBody, status);
+    }
+
+    const amountMismatch = assertClientAmountMatches(clientAmountPaise, finalPaise);
     if (amountMismatch) {
       step("amount mismatch — early return before session", {
         clientAmountPaise,
-        serverAmountPaise: validation.order.totalPaise,
+        serverFinalPaise: finalPaise,
+        subtotalPaise,
+        discountPaise,
       });
       return jsonResponse(
         {
@@ -136,18 +184,22 @@ Deno.serve(async (req) => {
     const auth = btoa(`${keyId}:${keySecret}`);
 
     step("creating razorpay order", {
-      amountPaise: validation.order.totalPaise,
+      amountPaise: finalPaise,
+      subtotalPaise,
+      discountPaise,
       currency,
       keyPrefix: keyId.slice(0, 12),
+      promoCode: appliedPromoCode,
     });
 
     const razorpayOrderPayload = {
-      amount: Math.trunc(validation.order.totalPaise),
+      amount: Math.trunc(finalPaise),
       currency,
       receipt,
       notes: {
         user_id: user.id,
         item_count: String(items.length),
+        ...(appliedPromoCode ? { promo_code: appliedPromoCode } : {}),
       },
     };
 
@@ -206,12 +258,24 @@ Deno.serve(async (req) => {
       amount: razorpayData.amount,
     });
 
-    const fulfillmentItems = toFulfillmentItems(validation.order.items);
+    const lineAmounts = validation.order.items.map((item) => item.lineAmount);
+    const discountRupee = discountPaise / 100;
+    const adjustedLineAmounts = applyDiscountToLineAmounts(lineAmounts, discountRupee);
+
+    const fulfillmentItems = validation.order.items.map((item, index) => ({
+      product_id: item.productId,
+      size: item.size,
+      quantity: item.quantity,
+      amount: adjustedLineAmounts[index] ?? item.lineAmount,
+    }));
 
     step("inserting payment session", {
       razorpay_order_id,
       user_id: user.id,
-      amount: validation.order.totalPaise,
+      amount: finalPaise,
+      subtotalPaise,
+      discountPaise,
+      promoCode: appliedPromoCode,
       itemCount: fulfillmentItems.length,
     });
 
@@ -227,7 +291,10 @@ Deno.serve(async (req) => {
           razorpay_order_id,
           items: fulfillmentItems,
           shipping_address: shippingSnapshot,
-          amount_paise: validation.order.totalPaise,
+          amount_paise: finalPaise,
+          subtotal_paise: subtotalPaise,
+          discount_paise: discountPaise,
+          promo_code: appliedPromoCode,
           status: "pending",
         })
         .select("*")
@@ -305,7 +372,9 @@ Deno.serve(async (req) => {
     step("success", {
       userId: user.id,
       orderId: razorpay_order_id,
-      amount: validation.order.totalPaise,
+      subtotal: subtotalRupee,
+      discount: discountRupee,
+      finalAmount: finalPaise / 100,
     });
 
     const responseAmount = Math.trunc(Number(razorpayData.amount));
@@ -329,6 +398,10 @@ Deno.serve(async (req) => {
       currency: responseCurrency,
       keyId,
       sessionVerified: true,
+      subtotal: subtotalRupee,
+      discount: discountRupee,
+      promoCode: appliedPromoCode,
+      finalAmount: finalPaise / 100,
     });
   } catch (error) {
     logPaymentError(SCOPE, "unhandled exception", error);

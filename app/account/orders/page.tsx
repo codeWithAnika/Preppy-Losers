@@ -82,8 +82,13 @@ export default async function AccountOrdersPage() {
                   </div>
                   <div className="text-right">
                     <p className="text-sm text-foreground">
-                      {formatINR(group.total_amount)}
+                      {formatINR(group.final_total ?? group.total_amount)}
                     </p>
+                    {group.promo_code && group.discount_amount > 0 ? (
+                      <p className="mt-1 text-xs text-emerald-400/90">
+                        Saved {formatINR(group.discount_amount)}
+                      </p>
+                    ) : null}
                     <p className="mt-1 text-xs uppercase tracking-[0.15em] text-muted">
                       {group.status}
                       {group.delivery_status
@@ -111,6 +116,21 @@ export default async function AccountOrdersPage() {
                     </li>
                   ))}
                 </ul>
+
+                {group.promo_code && group.discount_amount > 0 ? (
+                  <div className="mb-5 border-t border-white/10 pt-4 text-sm">
+                    <div className="flex items-center justify-between gap-4">
+                      <span className="text-muted">Promo</span>
+                      <span className="font-mono text-foreground">{group.promo_code}</span>
+                    </div>
+                    <div className="mt-2 flex items-center justify-between gap-4">
+                      <span className="text-muted">Discount</span>
+                      <span className="text-emerald-400/90">
+                        {formatINR(group.discount_amount)}
+                      </span>
+                    </div>
+                  </div>
+                ) : null}
 
                 {group.shipping_address && (
                   <div className="border-t border-white/10 pt-4 text-xs text-muted">

@@ -10,9 +10,11 @@ import {
   OrderSuccessModal,
   type OrderSuccessDetails,
 } from "@/components/checkout/OrderSuccessModal";
+import { PromoCodeSection } from "@/components/checkout/PromoCodeSection";
 import { MagneticGlitchButton } from "@/components/ui/MagneticGlitchButton";
 import { createClient } from "@/lib/supabase/client";
 import { useCartStore } from "@/lib/cart-store";
+import type { AppliedPromo } from "@/lib/promo";
 import {
   formatINR,
   getCartValidationError,
@@ -28,10 +30,13 @@ import {
   getFunctionErrorMessage,
   invokeCreateOrderWithRetry,
   invokeVerifyPaymentWithRetry,
-  isValidShippingAddress,
   mapRazorpayFailureDescription,
   type FunctionResponseBody,
 } from "@/lib/payment-utils";
+import {
+  getShippingAddressError,
+  normalizeShippingAddressInput,
+} from "@/lib/shipping-validation";
 import { loadRazorpayScript, type RazorpaySuccessResponse } from "@/lib/razorpay";
 import {
   buildRazorpayCheckoutOptions,
@@ -54,6 +59,10 @@ interface CreateOrderResponse extends FunctionResponseBody {
   amount?: number;
   currency?: string;
   sessionVerified?: boolean;
+  subtotal?: number;
+  discount?: number;
+  promoCode?: string | null;
+  finalAmount?: number;
 }
 
 function formatRazorpayContact(phone: string): string {
@@ -111,10 +120,15 @@ export function CheckoutForm({
   const [successDetails, setSuccessDetails] = useState<OrderSuccessDetails | null>(
     null
   );
+  const [appliedPromo, setAppliedPromo] = useState<AppliedPromo | null>(null);
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    setAppliedPromo(null);
+  }, [items]);
 
   useEffect(() => {
     if (selection.type === "saved") {
@@ -128,6 +142,8 @@ export function CheckoutForm({
   }, [selection, savedAddresses, userName]);
 
   const subtotal = mounted ? getSubtotal() : 0;
+  const discount = appliedPromo?.discount ?? 0;
+  const finalTotal = appliedPromo?.finalAmount ?? subtotal;
   const cartValidationError = mounted ? getCartValidationError(items) : null;
 
   const updateField = (field: keyof ShippingAddress, value: string) => {
@@ -157,10 +173,10 @@ export function CheckoutForm({
       return;
     }
 
-    if (!isValidShippingAddress(address)) {
-      setError(
-        "Please enter a complete shipping address (6-digit pincode, valid phone)."
-      );
+    const shippingAddress = normalizeShippingAddressInput(address, userName);
+    const addressError = getShippingAddressError(shippingAddress, userName);
+    if (addressError) {
+      setError(addressError);
       return;
     }
 
@@ -191,10 +207,11 @@ export function CheckoutForm({
 
       const { data: orderData, error: orderError } =
         await invokeCreateOrderWithRetry(supabase, {
-          amount: Math.round(subtotal * 100),
+          amount: Math.round(finalTotal * 100),
           currency: "INR",
           items,
-          shippingAddress: address,
+          shippingAddress,
+          ...(appliedPromo?.promoCode ? { promoCode: appliedPromo.promoCode } : {}),
         });
 
       const order = orderData as CreateOrderResponse | null;
@@ -234,9 +251,9 @@ export function CheckoutForm({
         name: "Preppy Losers",
         description: "Drop purchase",
         prefill: {
-          name: address.fullName || userName || undefined,
+          name: shippingAddress.fullName || userName || undefined,
           email: userEmail || undefined,
-          contact: formatRazorpayContact(address.phone) || undefined,
+          contact: formatRazorpayContact(shippingAddress.phone) || undefined,
         },
         theme: { color: "#8b1e1e" },
         handler: async (response: RazorpaySuccessResponse) => {
@@ -249,8 +266,11 @@ export function CheckoutForm({
               razorpay_payment_id: response.razorpay_payment_id,
               razorpay_signature: response.razorpay_signature,
               items,
-              shippingAddress: address,
+              shippingAddress,
               amount: checkoutParams.amountRupee,
+              ...(appliedPromo?.promoCode
+                ? { promoCode: appliedPromo.promoCode }
+                : {}),
             });
 
           setVerifying(false);
@@ -273,7 +293,7 @@ export function CheckoutForm({
               orderId: response.razorpay_order_id,
               paymentId: response.razorpay_payment_id,
               amountInr: checkoutParams.amountRupee,
-              customerName: address.fullName || userName,
+              customerName: shippingAddress.fullName || userName,
               items: items.map((item) => ({
                 productName: item.productName,
                 size: item.size,
@@ -281,24 +301,24 @@ export function CheckoutForm({
                 lineTotalInr: item.price * item.quantity,
               })),
               shippingAddress: {
-                line1: address.line1,
-                line2: address.line2,
-                city: address.city,
-                state: address.state,
-                pincode: address.pincode,
-                phone: address.phone,
+                line1: shippingAddress.line1,
+                line2: shippingAddress.line2,
+                city: shippingAddress.city,
+                state: shippingAddress.state,
+                pincode: shippingAddress.pincode,
+                phone: shippingAddress.phone,
               },
             });
 
             void saveCheckoutAddressAction({
-              fullName: address.fullName || userName,
-              phone: address.phone,
-              line1: address.line1,
-              line2: address.line2,
-              city: address.city,
-              state: address.state,
-              pincode: address.pincode,
-              country: address.country ?? "India",
+              fullName: shippingAddress.fullName || userName,
+              phone: shippingAddress.phone,
+              line1: shippingAddress.line1,
+              line2: shippingAddress.line2,
+              city: shippingAddress.city,
+              state: shippingAddress.state,
+              pincode: shippingAddress.pincode,
+              country: shippingAddress.country ?? "India",
               isDefault: true,
             });
           }
@@ -504,11 +524,37 @@ export function CheckoutForm({
             ))}
           </ul>
 
-          <div className="mb-6 flex items-center justify-between border-t border-white/10 pt-4">
-            <span className="text-xs uppercase tracking-[0.2em] text-muted">
-              Total
-            </span>
-            <span className="text-lg text-foreground">{formatINR(subtotal)}</span>
+          <PromoCodeSection
+            items={items}
+            appliedPromo={appliedPromo}
+            onApplied={setAppliedPromo}
+            onRemoved={() => setAppliedPromo(null)}
+            disabled={isBusy}
+          />
+
+          <div className="mb-6 space-y-2 border-t border-white/10 pt-4">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted">Subtotal</span>
+              <span className="text-foreground">{formatINR(subtotal)}</span>
+            </div>
+            {appliedPromo && (
+              <>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted">Promo ({appliedPromo.promoCode})</span>
+                  <span className="text-emerald-400/90">-{formatINR(discount)}</span>
+                </div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted">Discount</span>
+                  <span className="text-emerald-400/90">-{formatINR(discount)}</span>
+                </div>
+              </>
+            )}
+            <div className="flex items-center justify-between border-t border-white/10 pt-3">
+              <span className="text-xs uppercase tracking-[0.2em] text-muted">
+                Final Total
+              </span>
+              <span className="text-lg text-foreground">{formatINR(finalTotal)}</span>
+            </div>
           </div>
 
           {error && (
@@ -520,7 +566,7 @@ export function CheckoutForm({
           <MagneticGlitchButton
             type="submit"
             variant="outline"
-            disabled={isBusy || !Number.isFinite(subtotal) || subtotal <= 0}
+            disabled={isBusy || !Number.isFinite(finalTotal) || finalTotal <= 0}
             className="w-full"
           >
             {verifying

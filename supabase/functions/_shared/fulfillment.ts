@@ -25,6 +25,9 @@ export interface PaymentSessionRow {
   items: FulfillmentLineItem[];
   shipping_address: ShippingAddressPayload;
   amount_paise: number;
+  subtotal_paise: number;
+  discount_paise: number;
+  promo_code: string | null;
   status: string;
   razorpay_payment_id: string | null;
   expires_at: string;
@@ -72,6 +75,9 @@ export async function getPaymentSession(
 
   const row = data as PaymentSessionRow;
   row.amount_paise = Number(row.amount_paise);
+  row.subtotal_paise = Number(row.subtotal_paise ?? row.amount_paise);
+  row.discount_paise = Number(row.discount_paise ?? 0);
+  row.promo_code = row.promo_code ?? null;
   row.items = normalizeFulfillmentItems(row.items);
 
   return { session: row, dbError: null };
@@ -171,6 +177,10 @@ export async function runFulfillment(
     shippingAddress: ShippingAddressPayload;
     items: FulfillmentLineItem[];
     scope: string;
+    promoCode?: string | null;
+    discountAmount?: number;
+    originalSubtotal?: number;
+    finalTotal?: number;
   }
 ): Promise<FulfillmentResult> {
   logPayment(params.scope, "Calling fulfill_paid_order RPC", {
@@ -178,6 +188,7 @@ export async function runFulfillment(
     razorpayOrderId: params.razorpayOrderId,
     razorpayPaymentId: params.razorpayPaymentId,
     itemCount: params.items.length,
+    promoCode: params.promoCode ?? null,
   });
 
   const { data, error } = await supabaseAdmin.rpc("fulfill_paid_order", {
@@ -186,6 +197,10 @@ export async function runFulfillment(
     p_razorpay_payment_id: params.razorpayPaymentId,
     p_shipping_address: params.shippingAddress,
     p_items: params.items,
+    p_promo_code: params.promoCode ?? null,
+    p_discount_amount: params.discountAmount ?? 0,
+    p_original_subtotal: params.originalSubtotal ?? null,
+    p_final_total: params.finalTotal ?? null,
   });
 
   if (error) {
@@ -233,11 +248,18 @@ export async function upsertUserAddress(
   shippingAddress: ShippingAddressPayload,
   scope: string
 ): Promise<void> {
+  const fullName = shippingAddress.fullName?.trim();
+  if (!fullName) {
+    logPayment(scope, "Skipping address upsert — full name missing", { userId }, "warn");
+    return;
+  }
+
   const { data: existingAddress, error: lookupError } = await supabaseAdmin
-    .from("addresses")
+    .from("customer_addresses")
     .select("id")
     .eq("user_id", userId)
-    .limit(1)
+    .eq("address_line_1", shippingAddress.line1)
+    .eq("pincode", shippingAddress.pincode)
     .maybeSingle();
 
   if (lookupError) {
@@ -246,18 +268,20 @@ export async function upsertUserAddress(
   }
 
   const addressPayload = {
-    line1: shippingAddress.line1,
-    line2: shippingAddress.line2 ?? null,
+    full_name: fullName,
+    phone: shippingAddress.phone,
+    address_line_1: shippingAddress.line1,
+    address_line_2: shippingAddress.line2 ?? null,
     city: shippingAddress.city,
     state: shippingAddress.state,
     pincode: shippingAddress.pincode,
-    phone: shippingAddress.phone,
+    country: shippingAddress.country?.trim() || "India",
     is_default: true,
   };
 
   if (existingAddress?.id) {
     const { error: updateError } = await supabaseAdmin
-      .from("addresses")
+      .from("customer_addresses")
       .update(addressPayload)
       .eq("id", existingAddress.id);
 
@@ -270,7 +294,7 @@ export async function upsertUserAddress(
     return;
   }
 
-  const { error: insertError } = await supabaseAdmin.from("addresses").insert({
+  const { error: insertError } = await supabaseAdmin.from("customer_addresses").insert({
     user_id: userId,
     ...addressPayload,
   });
@@ -285,6 +309,24 @@ export async function upsertUserAddress(
 
 export function isSessionExpired(session: PaymentSessionRow): boolean {
   return new Date(session.expires_at).getTime() < Date.now();
+}
+
+export function itemsMatchSessionIdentity(
+  sessionItems: FulfillmentLineItem[],
+  validatedItems: FulfillmentLineItem[]
+): boolean {
+  const normalizedSession = normalizeFulfillmentItems(sessionItems);
+  const normalizedValidated = normalizeFulfillmentItems(validatedItems);
+
+  if (normalizedSession.length !== normalizedValidated.length) return false;
+
+  const sortKey = (item: FulfillmentLineItem) =>
+    `${item.product_id}:${item.size}:${item.quantity}`;
+
+  const sessionKeys = normalizedSession.map(sortKey).sort();
+  const validatedKeys = normalizedValidated.map(sortKey).sort();
+
+  return sessionKeys.every((key, index) => key === validatedKeys[index]);
 }
 
 export function itemsMatchSession(

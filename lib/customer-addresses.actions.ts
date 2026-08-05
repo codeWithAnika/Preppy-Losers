@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import type { CustomerAddressInput } from "@/lib/customer-addresses";
+import { isValidPhone } from "@/lib/shipping-validation";
 
 function validateInput(input: CustomerAddressInput): string | null {
   if (!input.fullName.trim()) return "Full name is required.";
@@ -10,7 +11,7 @@ function validateInput(input: CustomerAddressInput): string | null {
   if (!input.city.trim()) return "City is required.";
   if (!input.state.trim()) return "State is required.";
   if (!/^\d{6}$/.test(input.pincode.trim())) return "Enter a valid 6-digit pincode.";
-  if (input.phone.replace(/\D/g, "").length < 10) return "Enter a valid phone number.";
+  if (!isValidPhone(input.phone)) return "Enter a valid 10-digit Indian mobile number.";
   return null;
 }
 

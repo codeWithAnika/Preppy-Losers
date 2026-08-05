@@ -21,7 +21,7 @@ export function buildWelcomeEmailHtml(customerName: string): string {
       </p>
     `,
     ctaLabel: "Shop the drop",
-    ctaHref: `${getEmailSiteUrl()}/shop`,
+    ctaHref: getEmailSiteUrl(),
   });
 }
 

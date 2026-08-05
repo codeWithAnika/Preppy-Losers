@@ -136,6 +136,10 @@ export type Database = {
           courier_name: string | null;
           tracking_url: string | null;
           delivery_status: string | null;
+          promo_code: string | null;
+          discount_amount: number;
+          original_subtotal: number | null;
+          final_total: number | null;
           created_at: string;
         };
         Insert: {
@@ -153,6 +157,10 @@ export type Database = {
           courier_name?: string | null;
           tracking_url?: string | null;
           delivery_status?: string | null;
+          promo_code?: string | null;
+          discount_amount?: number;
+          original_subtotal?: number | null;
+          final_total?: number | null;
           created_at?: string;
         };
         Update: {
@@ -170,6 +178,10 @@ export type Database = {
           courier_name?: string | null;
           tracking_url?: string | null;
           delivery_status?: string | null;
+          promo_code?: string | null;
+          discount_amount?: number;
+          original_subtotal?: number | null;
+          final_total?: number | null;
           created_at?: string;
         };
         Relationships: [
@@ -258,6 +270,51 @@ export type Database = {
           status?: string;
           created_at?: string;
           updated_at?: string;
+        };
+        Relationships: [];
+      };
+      promo_codes: {
+        Row: {
+          id: string;
+          code: string;
+          type: "percentage" | "fixed";
+          value: number;
+          minimum_order: number;
+          maximum_discount: number | null;
+          max_uses: number | null;
+          used_count: number;
+          active: boolean;
+          starts_at: string | null;
+          expires_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          code: string;
+          type: "percentage" | "fixed";
+          value: number;
+          minimum_order?: number;
+          maximum_discount?: number | null;
+          max_uses?: number | null;
+          used_count?: number;
+          active?: boolean;
+          starts_at?: string | null;
+          expires_at?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          code?: string;
+          type?: "percentage" | "fixed";
+          value?: number;
+          minimum_order?: number;
+          maximum_discount?: number | null;
+          max_uses?: number | null;
+          used_count?: number;
+          active?: boolean;
+          starts_at?: string | null;
+          expires_at?: string | null;
+          created_at?: string;
         };
         Relationships: [];
       };
@@ -415,6 +472,26 @@ export type Database = {
           p_product_id: string;
           p_quantity: number;
           p_size: string;
+        };
+        Returns: boolean;
+      };
+      fulfill_paid_order: {
+        Args: {
+          p_user_id: string;
+          p_razorpay_order_id: string;
+          p_razorpay_payment_id: string;
+          p_shipping_address: Json;
+          p_items: Json;
+          p_promo_code?: string | null;
+          p_discount_amount?: number;
+          p_original_subtotal?: number | null;
+          p_final_total?: number | null;
+        };
+        Returns: Json;
+      };
+      increment_promo_used_count: {
+        Args: {
+          p_code: string;
         };
         Returns: boolean;
       };

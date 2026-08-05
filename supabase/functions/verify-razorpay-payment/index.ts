@@ -1,13 +1,14 @@
 import { getAuthenticatedUser, getServiceRoleClient } from "../_shared/auth.ts";
 import {
   isValidShippingAddress,
+  mergeShippingSnapshot,
   normalizeShippingSnapshot,
   type ShippingAddressPayload,
 } from "../_shared/address-validation.ts";
 import {
   getPaymentSession,
   isSessionExpired,
-  itemsMatchSession,
+  itemsMatchSessionIdentity,
   normalizeFulfillmentItems,
   runFulfillment,
   toFulfillmentItems,
@@ -20,6 +21,11 @@ import {
   type CartItemPayload,
   validateOrderItems,
 } from "../_shared/order-validation.ts";
+import {
+  applyDiscountToLineAmounts,
+  normalizePromoCode,
+  validatePromoForSubtotal,
+} from "../_shared/promo-validation.ts";
 import {
   isRazorpayPaymentSuccessful,
   verifyErrorResponse,
@@ -37,6 +43,7 @@ interface VerifyPaymentBody {
   items: CartItemPayload[];
   shippingAddress: ShippingAddressPayload;
   amount: number;
+  promoCode?: string;
 }
 
 const SCOPE = "verify-razorpay-payment";
@@ -83,6 +90,7 @@ Deno.serve(async (req) => {
       items,
       shippingAddress,
       amount: clientAmountRupee,
+      promoCode: clientPromoCode,
     } = body;
 
     step("payload received", {
@@ -167,28 +175,15 @@ Deno.serve(async (req) => {
       lineCount: validation.order.items.length,
     });
 
-    const amountMismatch = assertClientAmountMatches(
-      Number(clientAmountRupee),
-      validation.order.totalRupee
-    );
-    if (amountMismatch) {
-      step(
-        "amount mismatch",
-        {
-          clientAmountRupee: Number(clientAmountRupee),
-          serverTotalRupee: validation.order.totalRupee,
-        },
-        "warn"
-      );
-      const { body: errBody, status } = verifyErrorResponse(
-        "AMOUNT_MISMATCH",
-        400,
-        `client=${clientAmountRupee} server=${validation.order.totalRupee}`
-      );
-      return jsonResponse(errBody, status);
-    }
+    const subtotalRupee = validation.order.totalRupee;
+    const subtotalPaise = validation.order.totalPaise;
 
-    const fulfillmentItems = normalizeFulfillmentItems(
+    let discountRupee = 0;
+    let finalRupee = subtotalRupee;
+    let finalPaise = subtotalPaise;
+    let appliedPromoCode: string | null = null;
+
+    const validatedItems = normalizeFulfillmentItems(
       toFulfillmentItems(validation.order.items)
     );
 
@@ -205,7 +200,8 @@ Deno.serve(async (req) => {
     }
 
     let shippingForFulfillment: ShippingAddressPayload = shippingAddress;
-    let useSessionAmountPaise = validation.order.totalPaise;
+    let fulfillmentItems = validatedItems;
+    let useSessionAmountPaise = subtotalPaise;
     let sessionlessFallback = false;
 
     if (!session) {
@@ -215,11 +211,49 @@ Deno.serve(async (req) => {
         { orderId: razorpay_order_id },
         "warn"
       );
+      shippingForFulfillment = normalizeShippingSnapshot(shippingAddress);
+
+      const normalizedClientPromo = clientPromoCode
+        ? normalizePromoCode(clientPromoCode)
+        : "";
+      if (normalizedClientPromo) {
+        const promoResult = await validatePromoForSubtotal(
+          supabaseAdmin,
+          normalizedClientPromo,
+          subtotalRupee
+        );
+        if (!promoResult.ok) {
+          return jsonResponse(
+            {
+              success: false,
+              code: promoResult.code,
+              error: promoResult.error,
+              message: promoResult.error,
+            },
+            400
+          );
+        }
+        discountRupee = promoResult.pricing.discountRupee;
+        finalRupee = promoResult.pricing.finalRupee;
+        finalPaise = promoResult.pricing.finalPaise;
+        appliedPromoCode = promoResult.pricing.promoCode;
+        useSessionAmountPaise = finalPaise;
+
+        const lineAmounts = validation.order.items.map((item) => item.lineAmount);
+        const adjustedAmounts = applyDiscountToLineAmounts(lineAmounts, discountRupee);
+        fulfillmentItems = validation.order.items.map((item, index) => ({
+          product_id: item.productId,
+          size: item.size,
+          quantity: item.quantity,
+          amount: adjustedAmounts[index] ?? item.lineAmount,
+        }));
+      }
     } else {
       step("payment session found", {
         sessionId: session.id,
         status: session.status,
         amountPaise: session.amount_paise,
+        promoCode: session.promo_code,
       });
 
       if (session.user_id !== user.id) {
@@ -264,31 +298,111 @@ Deno.serve(async (req) => {
         return jsonResponse(errBody, status);
       }
 
-      useSessionAmountPaise = Number(session.amount_paise);
-
-      if (useSessionAmountPaise !== validation.order.totalPaise) {
+      if (session.subtotal_paise !== subtotalPaise) {
         step(
-          "session amount mismatch",
+          "session subtotal mismatch",
           {
-            sessionAmountPaise: useSessionAmountPaise,
-            validatedTotalPaise: validation.order.totalPaise,
+            sessionSubtotalPaise: session.subtotal_paise,
+            validatedTotalPaise: subtotalPaise,
           },
           "warn"
         );
         const { body: errBody, status } = verifyErrorResponse(
           "AMOUNT_MISMATCH",
           400,
-          `session=${useSessionAmountPaise} validated=${validation.order.totalPaise}`
+          `session subtotal=${session.subtotal_paise} validated=${subtotalPaise}`
         );
         return jsonResponse(errBody, status);
       }
 
-      if (!itemsMatchSession(session.items, fulfillmentItems)) {
+      useSessionAmountPaise = Number(session.amount_paise);
+      discountRupee = Number(session.discount_paise) / 100;
+      finalPaise = useSessionAmountPaise;
+      finalRupee = finalPaise / 100;
+      appliedPromoCode = session.promo_code;
+
+      const normalizedClientPromo = clientPromoCode
+        ? normalizePromoCode(clientPromoCode)
+        : "";
+      const normalizedSessionPromo = session.promo_code
+        ? normalizePromoCode(session.promo_code)
+        : "";
+
+      if (normalizedClientPromo !== normalizedSessionPromo) {
+        step(
+          "promo code tamper detected",
+          {
+            clientPromo: normalizedClientPromo,
+            sessionPromo: normalizedSessionPromo,
+          },
+          "warn"
+        );
+        const { body: errBody, status } = verifyErrorResponse(
+          "SESSION_MISMATCH",
+          400,
+          "promo code does not match checkout session"
+        );
+        return jsonResponse(errBody, status);
+      }
+
+      if (normalizedSessionPromo) {
+        const promoResult = await validatePromoForSubtotal(
+          supabaseAdmin,
+          normalizedSessionPromo,
+          subtotalRupee
+        );
+        if (!promoResult.ok) {
+          return jsonResponse(
+            {
+              success: false,
+              code: promoResult.code,
+              error: promoResult.error,
+              message: promoResult.error,
+            },
+            400
+          );
+        }
+
+        if (promoResult.pricing.discountPaise !== Number(session.discount_paise)) {
+          step("session discount mismatch", {
+            sessionDiscount: session.discount_paise,
+            recomputedDiscount: promoResult.pricing.discountPaise,
+          }, "warn");
+          const { body: errBody, status } = verifyErrorResponse(
+            "AMOUNT_MISMATCH",
+            400,
+            "promo discount mismatch"
+          );
+          return jsonResponse(errBody, status);
+        }
+
+        if (promoResult.pricing.finalPaise !== useSessionAmountPaise) {
+          const { body: errBody, status } = verifyErrorResponse(
+            "AMOUNT_MISMATCH",
+            400,
+            "promo final amount mismatch"
+          );
+          return jsonResponse(errBody, status);
+        }
+
+        discountRupee = promoResult.pricing.discountRupee;
+        finalRupee = promoResult.pricing.finalRupee;
+        appliedPromoCode = promoResult.pricing.promoCode;
+      } else if (Number(session.discount_paise) > 0 || session.promo_code) {
+        const { body: errBody, status } = verifyErrorResponse(
+          "SESSION_MISMATCH",
+          400,
+          "unexpected promo on session"
+        );
+        return jsonResponse(errBody, status);
+      }
+
+      if (!itemsMatchSessionIdentity(session.items, validatedItems)) {
         step(
           "session items mismatch",
           {
             sessionItems: session.items,
-            validatedItems: fulfillmentItems,
+            validatedItems,
           },
           "warn"
         );
@@ -300,8 +414,42 @@ Deno.serve(async (req) => {
         return jsonResponse(errBody, status);
       }
 
-      shippingForFulfillment = session.shipping_address;
+      fulfillmentItems = normalizeFulfillmentItems(session.items);
+      shippingForFulfillment = mergeShippingSnapshot(
+        session.shipping_address,
+        shippingAddress
+      );
       step("payment session checks passed");
+    }
+
+    const amountMismatch = assertClientAmountMatches(
+      Number(clientAmountRupee),
+      finalRupee
+    );
+    if (amountMismatch) {
+      step(
+        "amount mismatch",
+        {
+          clientAmountRupee: Number(clientAmountRupee),
+          serverFinalRupee: finalRupee,
+        },
+        "warn"
+      );
+      const { body: errBody, status } = verifyErrorResponse(
+        "AMOUNT_MISMATCH",
+        400,
+        `client=${clientAmountRupee} server=${finalRupee}`
+      );
+      return jsonResponse(errBody, status);
+    }
+
+    if (finalPaise <= 0) {
+      const { body: errBody, status } = verifyErrorResponse(
+        "INVALID_PAYLOAD",
+        400,
+        "final amount must be positive"
+      );
+      return jsonResponse(errBody, status);
     }
 
     step("fetching payment from Razorpay API", { paymentId: razorpay_payment_id });
@@ -362,6 +510,29 @@ Deno.serve(async (req) => {
 
     shippingForFulfillment = normalizeShippingSnapshot(shippingForFulfillment);
 
+    if (appliedPromoCode) {
+      const { data: incremented, error: promoIncrementError } = await supabaseAdmin.rpc(
+        "increment_promo_used_count",
+        { p_code: appliedPromoCode }
+      );
+
+      if (promoIncrementError || incremented !== true) {
+        step(
+          "promo usage increment failed before fulfillment",
+          { promoCode: appliedPromoCode, incremented, promoIncrementError },
+          "warn"
+        );
+        const { body: errBody, status } = verifyErrorResponse(
+          "USAGE_EXCEEDED",
+          409,
+          "promo code usage limit reached"
+        );
+        return jsonResponse(errBody, status);
+      }
+
+      step("promo usage reserved", { promoCode: appliedPromoCode });
+    }
+
     const fulfillment = await runFulfillment(supabaseAdmin, {
       userId: user.id,
       razorpayOrderId: razorpay_order_id,
@@ -369,6 +540,10 @@ Deno.serve(async (req) => {
       shippingAddress: shippingForFulfillment,
       items: fulfillmentItems,
       scope: SCOPE,
+      promoCode: appliedPromoCode,
+      discountAmount: Math.round(discountRupee),
+      originalSubtotal: Math.round(subtotalRupee),
+      finalTotal: Math.round(finalRupee),
     });
 
     if (!fulfillment.ok) {
@@ -396,13 +571,19 @@ Deno.serve(async (req) => {
     step("completed", {
       userId: user.id,
       paymentId: razorpay_payment_id,
-      amount: validation.order.totalRupee,
+      subtotal: subtotalRupee,
+      discount: discountRupee,
+      amount: finalRupee,
+      promoCode: appliedPromoCode,
       duplicate: fulfillment.duplicate,
     });
 
     return okResponse({
       success: true,
-      amount: validation.order.totalRupee,
+      amount: finalRupee,
+      subtotal: subtotalRupee,
+      discount: discountRupee,
+      promoCode: appliedPromoCode,
       duplicate: fulfillment.duplicate,
       code: fulfillment.duplicate ? "DUPLICATE_PAYMENT" : undefined,
     });

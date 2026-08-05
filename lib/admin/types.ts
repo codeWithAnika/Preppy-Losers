@@ -142,6 +142,36 @@ export type DropGroup = {
   isActive: boolean;
 };
 
+export type PromoCodeType = "percentage" | "fixed";
+
+export type AdminPromoCodeRow = {
+  id: string;
+  code: string;
+  type: PromoCodeType;
+  value: number;
+  minimum_order: number;
+  maximum_discount: number | null;
+  max_uses: number | null;
+  used_count: number;
+  active: boolean;
+  starts_at: string | null;
+  expires_at: string | null;
+  created_at: string;
+};
+
+export type PromoCodeFormInput = {
+  id?: string;
+  code: string;
+  type: PromoCodeType;
+  value: number;
+  minimumOrder: number;
+  maximumDiscount: number | null;
+  maxUses: number | null;
+  active: boolean;
+  startsAt: string | null;
+  expiresAt: string | null;
+};
+
 export const ORDER_STATUSES: OrderStatus[] = [
   "pending",
   "paid",

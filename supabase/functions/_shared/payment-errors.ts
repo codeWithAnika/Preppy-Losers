@@ -19,7 +19,13 @@ export type PaymentErrorCode =
   | "PAYMENT_SESSION_NOT_CREATED"
   | "SERVER_ERROR"
   | "RAZORPAY_ERROR"
-  | "SERVER_UNAVAILABLE";
+  | "SERVER_UNAVAILABLE"
+  | "INVALID_CODE"
+  | "INACTIVE_CODE"
+  | "EXPIRED_CODE"
+  | "NOT_STARTED"
+  | "MINIMUM_NOT_MET"
+  | "USAGE_EXCEEDED";
 
 export const USER_MESSAGES: Record<PaymentErrorCode, string> = {
   UNAUTHORIZED: "Your session expired. Please sign in again.",
@@ -43,6 +49,12 @@ export const USER_MESSAGES: Record<PaymentErrorCode, string> = {
   SERVER_ERROR: "Server unavailable. Please try again.",
   RAZORPAY_ERROR: "Payment gateway error. Please try again.",
   SERVER_UNAVAILABLE: "Server unavailable. Please try again.",
+  INVALID_CODE: "Invalid promo code.",
+  INACTIVE_CODE: "This promo code is inactive.",
+  EXPIRED_CODE: "This promo code has expired.",
+  NOT_STARTED: "This promo code is not active yet.",
+  MINIMUM_NOT_MET: "Minimum order amount not reached for this code.",
+  USAGE_EXCEEDED: "This promo code has reached its usage limit.",
 };
 
 export interface VerifyErrorBody {

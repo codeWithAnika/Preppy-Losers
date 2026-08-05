@@ -8,6 +8,7 @@
     "build:clean": "node scripts/clean-next.mjs && next build",
     "start": "next start",
     "lint": "next lint",
+    "test:promo": "node --experimental-strip-types --test lib/promo-calculations.test.ts",
     "gen:types": "supabase gen types typescript --project-id hcylhedomtjdkwfryasx > lib/database.types.ts",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
