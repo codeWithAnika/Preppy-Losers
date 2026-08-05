@@ -28,7 +28,7 @@ interface PageTransitionContextValue {
   navigateWithFade: (href: string) => void;
 }
 
-const PageTransitionContext = createContext<PageTransitionContextValue | null>(
+export const PageTransitionContext = createContext<PageTransitionContextValue | null>(
   null
 );
 
