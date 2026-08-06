@@ -136,7 +136,7 @@ Expected:
 |-----------|---------|-----|
 | `?error=auth_callback_failed` | Code exchange failed | Check Supabase Google provider credentials |
 | `?error=auth_callback_failed&reason=...` | Specific failure | Read `reason` on login page |
-| `?error=rate_limited` | Too many login page hits | Wait 15 min (`/auth/callback` is not rate-limited) |
+| `?error=rate_limited` | Too many full page loads of `/login` or `/signup` (30 / 15 min per IP) | Wait 15 min; RSC/prefetch and `/auth/callback` are not counted |
 | Google `redirect_uri_mismatch` | Wrong URI in Google Console | Must point to Supabase, not your app domain |
 
 ---

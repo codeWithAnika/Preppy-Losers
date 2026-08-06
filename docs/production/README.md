@@ -10,7 +10,7 @@ Operational checklist for launching **preppylosers.com**. Code-level hardening i
 | HTTPS redirect | `middleware.ts` (`FORCE_HTTPS=true`) |
 | CORS (preppylosers.com only) | `lib/security/cors.ts`, edge `supabase/functions/_shared/cors.ts` |
 | Rate limiting (100 req/min IP) | `middleware.ts`, `lib/rate-limit.ts` |
-| Auth rate limiting (5 / 15 min) | `middleware.ts` on `/login`, `/signup` only |
+| Auth rate limiting (30 / 15 min) | `middleware.ts` on `/login`, `/signup` only (excludes RSC/prefetch) |
 | Gzip compression | `compress: true` in `next.config.mjs` (enabled by default in prod) |
 | Static cache headers + ETags | `next.config.mjs` (`generateEtags: true`, Cache-Control) |
 | Image optimization (AVIF/WebP) | `next.config.mjs` `images` config |

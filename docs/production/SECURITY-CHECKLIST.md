@@ -10,7 +10,7 @@
 - [x] Permissions-Policy (restrict camera, mic, geolocation)
 - [x] CORS restricted to preppylosers.com (+ localhost in dev)
 - [x] Rate limiting: 100 req/min per IP (general)
-- [x] Auth rate limiting: 5 attempts / 15 min on login, signup, auth callback
+- [x] Auth rate limiting: 30 navigations / 15 min on `/login` and `/signup` only (RSC/prefetch excluded)
 - [x] `poweredByHeader: false`
 - [x] Secrets in env only — see `lib/env/server.ts`, `SECRET_ENV_KEYS`
 - [x] RLS on all Supabase tables
@@ -67,7 +67,7 @@ Supabase Auth cookies use `SameSite=Lax` by default. Payment mutations go throug
 
 - Middleware limits `/login`, `/signup`, `/auth/callback` to 5 requests / 15 min per IP
 - Supabase Auth has built-in rate limits (configure in Dashboard → Auth → Rate Limits)
-- Test: 6 rapid requests to `/login` → redirect with `?error=rate_limited`
+- Test: 30+ rapid full navigations to `/login` within 15 min → redirect with `?error=rate_limited`
 
 ## Pre-launch manual checklist
 

@@ -82,24 +82,50 @@ export const GENERAL_RATE_LIMIT: RateLimitConfig = {
   windowMs: 60_000,
 };
 
-/** Auth endpoints: 5 attempts per 15 minutes per IP. */
+/** Auth entry pages: 30 navigations per 15 minutes per IP (excludes RSC/prefetch). */
 export const AUTH_RATE_LIMIT: RateLimitConfig = {
-  limit: 5,
+  limit: 30,
   windowMs: 15 * 60_000,
 };
 
-export function getClientIp(request: Request): string {
+function anonymousClientKey(request: Request): string {
+  const ua = request.headers.get("user-agent") ?? "no-ua";
+  const lang = request.headers.get("accept-language") ?? "no-lang";
+  let hash = 2166136261;
+
+  for (const char of `${ua}|${lang}`) {
+    hash ^= char.charCodeAt(0);
+    hash = Math.imul(hash, 16777619);
+  }
+
+  return `anon:${(hash >>> 0).toString(16)}`;
+}
+
+export function getClientIp(request: Request & { ip?: string | null }): string {
+  const directIp = request.ip?.trim();
+  if (directIp) {
+    return directIp;
+  }
+
   const forwarded = request.headers.get("x-forwarded-for");
   if (forwarded) {
-    return forwarded.split(",")[0]?.trim() ?? "unknown";
+    const first = forwarded.split(",")[0]?.trim();
+    if (first) {
+      return first;
+    }
   }
 
-  const realIp = request.headers.get("x-real-ip");
+  const realIp = request.headers.get("x-real-ip")?.trim();
   if (realIp) {
-    return realIp.trim();
+    return realIp;
   }
 
-  return "unknown";
+  const cfIp = request.headers.get("cf-connecting-ip")?.trim();
+  if (cfIp) {
+    return cfIp;
+  }
+
+  return anonymousClientKey(request);
 }
 
 export function applyRateLimitHeaders(

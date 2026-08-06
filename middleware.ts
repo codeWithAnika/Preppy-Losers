@@ -11,12 +11,18 @@ import { getCorsHeaders } from "@/lib/security/cors";
 import { getSecurityHeaders } from "@/lib/security/headers";
 import { updateSession } from "@/lib/supabase/middleware";
 
-/** Brute-force sensitive pages only — exclude /auth/callback (OAuth return from Google). */
-const AUTH_RATE_LIMIT_PATHS = ["/login", "/signup"];
+/** Exact auth entry pages only — not forgot-password, reset-password, or callback. */
+const AUTH_RATE_LIMIT_PATHS = new Set(["/login", "/signup"]);
 
 function isAuthRateLimitPath(pathname: string): boolean {
-  return AUTH_RATE_LIMIT_PATHS.some(
-    (path) => pathname === path || pathname.startsWith(`${path}/`)
+  return AUTH_RATE_LIMIT_PATHS.has(pathname);
+}
+
+function isNextInternalRequest(request: NextRequest): boolean {
+  return (
+    request.headers.get("RSC") === "1" ||
+    request.headers.get("Next-Router-Prefetch") === "1" ||
+    request.headers.get("Next-Router-State-Tree") !== null
   );
 }
 
@@ -87,7 +93,7 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  if (isAuthRateLimitPath(pathname)) {
+  if (isAuthRateLimitPath(pathname) && !isNextInternalRequest(request)) {
     const authLimit = rateLimit(ip, AUTH_RATE_LIMIT, "auth");
 
     if (!authLimit.success) {
