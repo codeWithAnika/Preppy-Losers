@@ -30,12 +30,12 @@ export default async function AdminDashboardPage() {
         <StatCard label="Customers" value={stats.customersCount} icon={<Users size={16} />} />
         <StatCard label="Products" value={stats.productsCount} icon={<Package size={16} />} />
         <StatCard
-          label="Active Drop"
-          value={stats.activeDrop?.name ?? "None"}
+          label="Active Drops"
+          value={String(stats.activeDrops.length)}
           hint={
-            stats.activeDrop
-              ? `Drop ${stats.activeDrop.drop_number ?? "—"}`
-              : "No live drop"
+            stats.activeDrops.length > 0
+              ? stats.activeDrops.map((d) => d.name).join(", ")
+              : "No live drops"
           }
           icon={<Zap size={16} />}
         />

@@ -8,6 +8,13 @@ import { slugify } from "@/lib/admin/format";
 import { buildDefaultSizeStock } from "@/lib/products";
 import type { SizeStock } from "@/lib/products";
 
+function validateProductInput(input: ProductFormInput): string | null {
+  if (input.status === "published" && !input.dropId) {
+    return "Assign a drop before publishing this product.";
+  }
+  return null;
+}
+
 function productPayload(input: ProductFormInput) {
   const images = input.images.length > 0 ? input.images : [];
   const primaryImage = input.primaryImage || images[0] || null;
@@ -21,12 +28,11 @@ function productPayload(input: ProductFormInput) {
     description: input.description,
     details: input.details || null,
     price: Math.round(input.price),
-    drop_number: input.dropNumber,
+    drop_id: input.dropId || null,
     drop_date: input.dropDate,
     size_stock: sizeStock,
     images,
     primary_image: primaryImage,
-    is_active: input.isActive,
     featured: input.featured,
     category: input.category || null,
     weight_grams: input.weightGrams,
@@ -38,25 +44,14 @@ function productPayload(input: ProductFormInput) {
   };
 }
 
-async function deactivateOtherActiveProducts(
-  supabase: ReturnType<typeof import("@/lib/supabase/server").createClient>,
-  activeId: string
-) {
-  await supabase
-    .from("products")
-    .update({ is_active: false, updated_at: new Date().toISOString() })
-    .neq("id", activeId)
-    .eq("is_active", true);
-}
-
 export async function createProductAction(input: ProductFormInput) {
   const { supabase } = await assertAdminAction();
-  const payload = productPayload(input);
-
-  if (payload.is_active) {
-    await deactivateOtherActiveProducts(supabase, payload.id);
+  const validationError = validateProductInput(input);
+  if (validationError) {
+    return { success: false as const, error: validationError };
   }
 
+  const payload = productPayload(input);
   const { error } = await supabase.from("products").insert(payload);
   if (error) return { success: false as const, error: error.message };
 
@@ -71,12 +66,12 @@ export async function updateProductAction(input: ProductFormInput) {
   const { supabase } = await assertAdminAction();
   if (!input.id) return { success: false as const, error: "Missing product id" };
 
-  const payload = productPayload({ ...input, id: input.id });
-
-  if (payload.is_active) {
-    await deactivateOtherActiveProducts(supabase, input.id);
+  const validationError = validateProductInput(input);
+  if (validationError) {
+    return { success: false as const, error: validationError };
   }
 
+  const payload = productPayload({ ...input, id: input.id });
   const { error } = await supabase
     .from("products")
     .update(payload)
@@ -120,7 +115,6 @@ export async function duplicateProductAction(id: string) {
     id: newId,
     slug: newId,
     name: `${data.name} (Copy)`,
-    is_active: false,
     status: "draft" as ProductStatus,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
@@ -139,7 +133,6 @@ export async function archiveProductAction(id: string) {
     .from("products")
     .update({
       status: "archived",
-      is_active: false,
       updated_at: new Date().toISOString(),
     })
     .eq("id", id);
@@ -159,11 +152,9 @@ export async function bulkUpdateProductStatusAction(
   const payload: TablesUpdate<"products"> = {
     status,
     updated_at: new Date().toISOString(),
-    ...(status !== "published" ? { is_active: false } : {}),
   };
 
   const { error } = await supabase.from("products").update(payload).in("id", ids);
-
   if (error) return { success: false as const, error: error.message };
 
   revalidatePath("/admin/products");

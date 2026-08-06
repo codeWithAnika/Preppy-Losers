@@ -89,7 +89,8 @@ LIMIT 20;
 
 Common queries to watch:
 - `orders` filtered by `user_id`
-- `products` where `is_active = true`
+- `drops` where `is_active = true` and `status = 'published'`
+- `products` joined to `drops` via `drop_id` for purchasability
 - `profiles` role checks
 
 ## Zero-downtime migration strategy

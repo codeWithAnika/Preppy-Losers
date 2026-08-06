@@ -143,6 +143,75 @@ export type Database = {
           },
         ];
       };
+      drops: {
+        Row: {
+          id: string;
+          drop_number: number;
+          name: string;
+          slug: string;
+          description: string | null;
+          hero_image: string | null;
+          banner_image: string | null;
+          launch_date: string;
+          is_active: boolean;
+          status: string;
+          seo_title: string | null;
+          seo_description: string | null;
+          display_order: number;
+          starts_at: string | null;
+          ends_at: string | null;
+          featured: boolean;
+          theme_color: string | null;
+          visibility: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          drop_number: number;
+          name: string;
+          slug: string;
+          description?: string | null;
+          hero_image?: string | null;
+          banner_image?: string | null;
+          launch_date: string;
+          is_active?: boolean;
+          status?: string;
+          seo_title?: string | null;
+          seo_description?: string | null;
+          display_order?: number;
+          starts_at?: string | null;
+          ends_at?: string | null;
+          featured?: boolean;
+          theme_color?: string | null;
+          visibility?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          drop_number?: number;
+          name?: string;
+          slug?: string;
+          description?: string | null;
+          hero_image?: string | null;
+          banner_image?: string | null;
+          launch_date?: string;
+          is_active?: boolean;
+          status?: string;
+          seo_title?: string | null;
+          seo_description?: string | null;
+          display_order?: number;
+          starts_at?: string | null;
+          ends_at?: string | null;
+          featured?: boolean;
+          theme_color?: string | null;
+          visibility?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       orders: {
         Row: {
           id: string;
@@ -231,9 +300,10 @@ export type Database = {
           description: string;
           details: string | null;
           price: number;
-          drop_number: number | null;
+          drop_id: string | null;
           size_stock: Json;
           images: Json;
+          /** @deprecated Legacy column — kept for one release; app uses product.status + drop rules */
           is_active: boolean;
           drop_date: string;
           accent_color: string | null;
@@ -254,7 +324,7 @@ export type Database = {
           description: string;
           details?: string | null;
           price: number;
-          drop_number?: number | null;
+          drop_id?: string | null;
           size_stock?: Json;
           images?: Json;
           is_active?: boolean;
@@ -277,7 +347,7 @@ export type Database = {
           description?: string;
           details?: string | null;
           price?: number;
-          drop_number?: number | null;
+          drop_id?: string | null;
           size_stock?: Json;
           images?: Json;
           is_active?: boolean;
@@ -294,7 +364,15 @@ export type Database = {
           created_at?: string;
           updated_at?: string;
         };
-        Relationships: [];
+        Relationships: [
+          {
+            foreignKeyName: "products_drop_id_fkey";
+            columns: ["drop_id"];
+            isOneToOne: false;
+            referencedRelation: "drops";
+            referencedColumns: ["id"];
+          },
+        ];
       };
       promo_codes: {
         Row: {

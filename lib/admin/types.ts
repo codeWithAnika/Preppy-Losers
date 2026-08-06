@@ -10,12 +10,11 @@ export type AdminProductRow = {
   description: string;
   details: string | null;
   price: number;
-  drop_number: number | null;
+  drop_id: string | null;
   drop_date: string;
   size_stock: SizeStock[];
   images: string[];
   primary_image: string | null;
-  is_active: boolean;
   featured: boolean;
   category: string | null;
   weight_grams: number | null;
@@ -85,7 +84,7 @@ export type DashboardStats = {
   ordersCount: number;
   customersCount: number;
   productsCount: number;
-  activeDrop: AdminProductRow | null;
+  activeDrops: AdminDropRow[];
   outOfStockCount: number;
   recentOrders: AdminOrderWithCustomer[];
   latestCustomers: AdminCustomerRow[];
@@ -118,12 +117,11 @@ export type ProductFormInput = {
   description: string;
   details: string;
   price: number;
-  dropNumber: number;
+  dropId: string;
   dropDate: string;
   category: string;
   status: ProductStatus;
   featured: boolean;
-  isActive: boolean;
   primaryImage: string;
   images: string[];
   sizeStock: SizeStock[];
@@ -133,13 +131,33 @@ export type ProductFormInput = {
   accentColor: string;
 };
 
+export type AdminDropRow = {
+  id: string;
+  drop_number: number;
+  name: string;
+  slug: string;
+  description: string | null;
+  hero_image: string | null;
+  banner_image: string | null;
+  launch_date: string;
+  is_active: boolean;
+  status: ProductStatus;
+  seo_title: string | null;
+  seo_description: string | null;
+  display_order: number;
+  starts_at: string | null;
+  ends_at: string | null;
+  featured: boolean;
+  theme_color: string | null;
+  visibility: "public" | "hidden" | "unlisted";
+  created_at: string;
+  updated_at: string;
+  product_count?: number;
+};
+
 export type DropGroup = {
-  dropNumber: number;
-  title: string;
-  releaseDate: string;
+  drop: AdminDropRow;
   products: AdminProductRow[];
-  heroProduct: AdminProductRow | null;
-  isActive: boolean;
 };
 
 export type PromoCodeType = "percentage" | "fixed";

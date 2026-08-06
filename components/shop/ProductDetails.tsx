@@ -9,19 +9,20 @@ import { useCartStore } from "@/lib/cart-store";
 import {
   getSizeStock,
   isProductFullySoldOut,
-  formatDropLabel,
   type Product,
 } from "@/lib/products";
 import { formatINR } from "@/lib/cart";
 
 interface ProductDetailsProps {
   product: Product;
+  dropLabel?: string;
   selectedSize: string | null;
   onSelectedSizeChange: (size: string | null) => void;
 }
 
 export function ProductDetails({
   product,
+  dropLabel,
   selectedSize,
   onSelectedSizeChange,
 }: ProductDetailsProps) {
@@ -64,12 +65,14 @@ export function ProductDetails({
 
   return (
     <div ref={containerRef} className="flex flex-col">
-      <p
-        data-shop-reveal
-        className="mb-2 text-xs uppercase tracking-[0.3em] text-muted"
-      >
-        {formatDropLabel(product.dropNumber)}
-      </p>
+      {dropLabel ? (
+        <p
+          data-shop-reveal
+          className="mb-2 text-xs uppercase tracking-[0.3em] text-muted"
+        >
+          {dropLabel}
+        </p>
+      ) : null}
 
       <DistressedHeadline
         as="h1"

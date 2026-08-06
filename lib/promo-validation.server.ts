@@ -9,6 +9,9 @@ import {
   normalizePromoCode,
   type PromoCalculationInput,
 } from "@/lib/promo-calculations";
+import { isProductPurchasable } from "@/lib/purchasability";
+import { mapDropRow } from "@/lib/drops";
+import type { DropRow } from "@/lib/drops";
 import type {
   PromoCartItemPayload,
   PromoErrorCode,
@@ -30,12 +33,14 @@ interface SizeStockEntry {
   stock: number;
 }
 
-interface ProductRow {
+interface ProductWithDropRow {
   id: string;
   name: string;
   price: number;
   size_stock: SizeStockEntry[] | null;
-  is_active: boolean;
+  status: string;
+  drop_id: string | null;
+  drops: DropRow | DropRow[] | null;
 }
 
 interface PromoCodeRow {
@@ -56,6 +61,12 @@ type OrderValidationResult =
   | { ok: true; totalRupee: number }
   | { ok: false; error: string; code: ValidatePromoFailure["code"] };
 
+function resolveDropJoin(drops: DropRow | DropRow[] | null) {
+  if (!drops) return null;
+  const row = Array.isArray(drops) ? drops[0] : drops;
+  return row ? mapDropRow(row) : null;
+}
+
 async function validateOrderSubtotal(
   supabase: SupabaseClient,
   items: PromoCartItemPayload[]
@@ -67,7 +78,7 @@ async function validateOrderSubtotal(
   const productIds = Array.from(new Set(items.map((item) => item.productId)));
   const { data: products, error } = await supabase
     .from("products")
-    .select("id, name, price, size_stock, is_active")
+    .select("id, name, price, size_stock, status, drop_id, drops(*)")
     .in("id", productIds);
 
   if (error) {
@@ -79,7 +90,7 @@ async function validateOrderSubtotal(
   }
 
   const productMap = new Map(
-    ((products ?? []) as ProductRow[]).map((product) => [product.id, product])
+    ((products ?? []) as ProductWithDropRow[]).map((product) => [product.id, product])
   );
 
   let totalRupee = 0;
@@ -89,12 +100,26 @@ async function validateOrderSubtotal(
       return { ok: false, error: "Invalid cart item.", code: "INVALID_PAYLOAD" };
     }
 
-    const product = productMap.get(item.productId);
-    if (!product) {
+    const row = productMap.get(item.productId);
+    if (!row) {
       return { ok: false, error: "Unknown product in cart.", code: "INVALID_PAYLOAD" };
     }
 
-    if (!product.is_active) {
+    const drop = resolveDropJoin(row.drops);
+    const product = {
+      id: row.id,
+      dropId: row.drop_id,
+      status: row.status as "draft" | "published" | "archived",
+      name: row.name,
+      description: "",
+      details: null,
+      price: row.price,
+      images: [],
+      sizeStock: [],
+      dropDate: "",
+    };
+
+    if (!isProductPurchasable(product, drop)) {
       return {
         ok: false,
         error: `Product is not available: ${product.name}`,
@@ -102,7 +127,7 @@ async function validateOrderSubtotal(
       };
     }
 
-    const sizeEntry = (product.size_stock ?? []).find((entry) => entry.size === item.size);
+    const sizeEntry = (row.size_stock ?? []).find((entry) => entry.size === item.size);
     if (!sizeEntry) {
       return {
         ok: false,
@@ -119,7 +144,7 @@ async function validateOrderSubtotal(
       };
     }
 
-    if (item.price !== product.price) {
+    if (item.price !== row.price) {
       return {
         ok: false,
         error: "Prices changed. Refresh your cart and try again.",
@@ -127,7 +152,7 @@ async function validateOrderSubtotal(
       };
     }
 
-    totalRupee += product.price * item.quantity;
+    totalRupee += row.price * item.quantity;
   }
 
   return { ok: true, totalRupee };

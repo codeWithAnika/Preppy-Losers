@@ -6,6 +6,7 @@ import type {
   AdminOrderWithCustomer,
   AdminProductRow,
   AdminPromoCodeRow,
+  AdminDropRow,
   ChartPoint,
   DashboardStats,
   StockAlert,
@@ -13,8 +14,33 @@ import type {
 } from "@/lib/admin/types";
 import { DEFAULT_STORE_SETTINGS } from "@/lib/admin/types";
 import { isOutOfStock } from "@/lib/admin/product-utils";
+import { mapDropRow } from "@/lib/drops";
+import { isDropListed } from "@/lib/purchasability";
 
-export { groupProductsByDrop, inventoryTotal, isOutOfStock } from "@/lib/admin/product-utils";
+export { buildDropGroups, inventoryTotal, isOutOfStock } from "@/lib/admin/product-utils";
+
+export async function fetchAdminDrops(): Promise<AdminDropRow[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("drops")
+    .select("*")
+    .order("launch_date", { ascending: false });
+
+  if (error) throw new Error(error.message);
+  return (data ?? []) as AdminDropRow[];
+}
+
+export async function fetchAdminDrop(id: string): Promise<AdminDropRow | null> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("drops")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+  return data as AdminDropRow | null;
+}
 
 export async function fetchAdminProducts(): Promise<AdminProductRow[]> {
   const supabase = createClient();
@@ -24,7 +50,7 @@ export async function fetchAdminProducts(): Promise<AdminProductRow[]> {
     .order("created_at", { ascending: false });
 
   if (error) throw new Error(error.message);
-  return (data ?? []) as AdminProductRow[];
+  return (data ?? []) as unknown as AdminProductRow[];
 }
 
 export async function fetchAdminProduct(id: string): Promise<AdminProductRow | null> {
@@ -36,7 +62,7 @@ export async function fetchAdminProduct(id: string): Promise<AdminProductRow | n
     .maybeSingle();
 
   if (error) throw new Error(error.message);
-  return data as AdminProductRow | null;
+  return data as unknown as AdminProductRow | null;
 }
 
 export async function fetchAdminOrders(): Promise<AdminOrderRow[]> {
@@ -189,9 +215,10 @@ export async function fetchAdminPromoCodes(): Promise<AdminPromoCodeRow[]> {
 }
 
 export async function fetchDashboardStats(): Promise<DashboardStats> {
-  const [products, orders] = await Promise.all([
+  const [products, orders, drops] = await Promise.all([
     fetchAdminProducts(),
     fetchAdminOrders(),
+    fetchAdminDrops(),
   ]);
 
   const customers = await fetchAdminCustomers(
@@ -202,7 +229,7 @@ export async function fetchDashboardStats(): Promise<DashboardStats> {
     (order) => order.status !== "cancelled" && order.status !== "pending"
   );
   const revenue = paidOrders.reduce((sum, order) => sum + order.amount, 0);
-  const activeDrop = products.find((product) => product.is_active) ?? null;
+  const activeDrops = drops.filter((drop) => isDropListed(mapDropRow(drop)));
   const outOfStockCount = products.filter(isOutOfStock).length;
 
   const stockAlerts: StockAlert[] = [];
@@ -236,7 +263,7 @@ export async function fetchDashboardStats(): Promise<DashboardStats> {
     ordersCount: orders.length,
     customersCount: customers.length,
     productsCount: products.length,
-    activeDrop,
+    activeDrops,
     outOfStockCount,
     recentOrders,
     latestCustomers: customers.slice(0, 6),

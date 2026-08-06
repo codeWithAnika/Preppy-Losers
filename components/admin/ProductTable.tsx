@@ -10,7 +10,8 @@ import {
   Pencil,
   Trash2,
 } from "lucide-react";
-import type { AdminProductRow } from "@/lib/admin/types";
+import type { AdminDropRow, AdminProductRow } from "@/lib/admin/types";
+import { formatDropLabel } from "@/lib/drops";
 import { formatAdminDate, formatINR } from "@/lib/admin/format";
 import { inventoryTotal } from "@/lib/admin/product-utils";
 import { ConfirmDialog } from "@/components/admin/ConfirmDialog";
@@ -26,14 +27,19 @@ import { useRouter } from "next/navigation";
 
 interface ProductTableProps {
   products: AdminProductRow[];
+  drops?: AdminDropRow[];
   initialQuery?: string;
 }
 
 const PAGE_SIZE = 10;
 
-export function ProductTable({ products, initialQuery = "" }: ProductTableProps) {
+export function ProductTable({ products, drops = [], initialQuery = "" }: ProductTableProps) {
   const router = useRouter();
   const { toast } = useAdminToast();
+  const dropById = useMemo(
+    () => new Map(drops.map((drop) => [drop.id, drop])),
+    [drops]
+  );
   const [query, setQuery] = useState(initialQuery);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [sortBy, setSortBy] = useState<"newest" | "name" | "price">("newest");
@@ -46,12 +52,16 @@ export function ProductTable({ products, initialQuery = "" }: ProductTableProps)
     let list = [...products];
     if (query.trim()) {
       const q = query.toLowerCase();
-      list = list.filter(
-        (product) =>
+      list = list.filter((product) => {
+        const drop = product.drop_id ? dropById.get(product.drop_id) : null;
+        const dropLabel = drop ? formatDropLabel(drop.drop_number) : "";
+        return (
           product.name.toLowerCase().includes(q) ||
           product.id.toLowerCase().includes(q) ||
-          String(product.drop_number ?? "").includes(q)
-      );
+          dropLabel.toLowerCase().includes(q) ||
+          (drop?.name.toLowerCase().includes(q) ?? false)
+        );
+      });
     }
     if (statusFilter !== "all") {
       list = list.filter((product) => product.status === statusFilter);
@@ -62,7 +72,7 @@ export function ProductTable({ products, initialQuery = "" }: ProductTableProps)
       return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
     });
     return list;
-  }, [products, query, sortBy, statusFilter]);
+  }, [products, query, sortBy, statusFilter, dropById]);
 
   const { items, page: currentPage, totalPages } = paginate(filtered, page, PAGE_SIZE);
 
@@ -200,11 +210,15 @@ export function ProductTable({ products, initialQuery = "" }: ProductTableProps)
                     <Link href={`/admin/products/${product.id}`} className="admin-link">
                       {product.name}
                     </Link>
-                    {product.is_active ? (
-                      <span className="admin-badge admin-badge--accent">Live</span>
+                    {product.status === "published" ? (
+                      <span className="admin-badge admin-badge--accent">Published</span>
                     ) : null}
                   </td>
-                  <td>Drop {product.drop_number ?? "—"}</td>
+                  <td>
+                    {product.drop_id && dropById.get(product.drop_id)
+                      ? formatDropLabel(dropById.get(product.drop_id)!.drop_number)
+                      : "—"}
+                  </td>
                   <td>{formatINR(product.price)}</td>
                   <td>
                     <span className={`admin-badge admin-badge--${product.status}`}>

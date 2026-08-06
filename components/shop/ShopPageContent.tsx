@@ -1,44 +1,34 @@
 "use client";
 
-import { useRef, useLayoutEffect, useEffect, useState } from "react";
+import { useLayoutEffect, useRef } from "react";
 import { gsap, registerGSAP } from "@/lib/animations/gsap";
 import { PAGE_REVEAL_EVENT } from "@/lib/page-transition";
-import { ProductGallery } from "@/components/shop/ProductGallery";
-import { ProductDetails } from "@/components/shop/ProductDetails";
-import { ProductAccordion } from "@/components/shop/ProductAccordion";
+import { ActiveDropSection } from "@/components/shop/ActiveDropSection";
 import { PastDropsSection } from "@/components/shop/PastDropsSection";
-import type { Product } from "@/lib/products";
+import type { DropWithProducts } from "@/lib/drops.types";
 
 interface ShopPageContentProps {
-  activeProduct: Product;
-  pastProducts: Product[];
+  activeDrops: DropWithProducts[];
+  pastDrops: DropWithProducts[];
 }
 
-export function ShopPageContent({
-  activeProduct,
-  pastProducts,
-}: ShopPageContentProps) {
-  const galleryRef = useRef<HTMLDivElement>(null);
-  const [selectedSize, setSelectedSize] = useState<string | null>(null);
-
-  useEffect(() => {
-    setSelectedSize(null);
-  }, [activeProduct.id]);
+export function ShopPageContent({ activeDrops, pastDrops }: ShopPageContentProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
 
   useLayoutEffect(() => {
     registerGSAP();
 
-    const gallery = galleryRef.current;
-    if (!gallery) return;
+    const container = containerRef.current;
+    if (!container) return;
 
     let hasPlayed = false;
 
-    const playGalleryEntrance = (extraDelay = 0) => {
+    const playEntrance = (extraDelay = 0) => {
       if (hasPlayed) return;
       hasPlayed = true;
 
       gsap.fromTo(
-        gallery,
+        container,
         { opacity: 0, y: 28 },
         {
           opacity: 1,
@@ -50,7 +40,7 @@ export function ShopPageContent({
       );
     };
 
-    const handleTransitionReveal = () => playGalleryEntrance(0.12);
+    const handleTransitionReveal = () => playEntrance(0.12);
     window.addEventListener(PAGE_REVEAL_EVENT, handleTransitionReveal);
 
     const pending =
@@ -58,7 +48,7 @@ export function ShopPageContent({
       sessionStorage.getItem("pl-page-transition") === "1";
 
     if (!pending) {
-      playGalleryEntrance(0);
+      playEntrance(0);
     }
 
     return () => {
@@ -68,28 +58,15 @@ export function ShopPageContent({
 
   return (
     <div className="relative min-h-screen">
-      <div className="relative z-[2] mx-auto max-w-6xl px-4 pb-20 pt-24 md:px-8 md:pb-24">
-        <div className="grid gap-10 lg:grid-cols-2 lg:gap-14 lg:items-start">
-          <div ref={galleryRef}>
-            <ProductGallery
-              images={activeProduct.images}
-              productName={activeProduct.name}
-            />
-          </div>
+      <div
+        ref={containerRef}
+        className="relative z-[2] mx-auto max-w-6xl px-4 pb-20 pt-24 md:px-8 md:pb-24"
+      >
+        {activeDrops.map((drop, index) => (
+          <ActiveDropSection key={drop.id} drop={drop} showDivider={index > 0} />
+        ))}
 
-          <ProductDetails
-            product={activeProduct}
-            selectedSize={selectedSize}
-            onSelectedSizeChange={setSelectedSize}
-          />
-        </div>
-
-        <ProductAccordion
-          product={activeProduct}
-          selectedSize={selectedSize}
-        />
-
-        <PastDropsSection products={pastProducts} />
+        <PastDropsSection drops={pastDrops} />
       </div>
     </div>
   );

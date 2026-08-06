@@ -1,4 +1,4 @@
-import type { AdminProductRow } from "@/lib/admin/types";
+import type { AdminDropRow, AdminProductRow, DropGroup } from "@/lib/admin/types";
 
 function totalStock(product: AdminProductRow): number {
   return (product.size_stock ?? []).reduce((sum, entry) => sum + entry.stock, 0);
@@ -13,36 +13,32 @@ export function inventoryTotal(product: AdminProductRow): number {
   return totalStock(product);
 }
 
-export function groupProductsByDrop(products: AdminProductRow[]) {
-  const map = new Map<number, AdminProductRow[]>();
+export function buildDropGroups(
+  drops: AdminDropRow[],
+  products: AdminProductRow[]
+): DropGroup[] {
+  const productsByDrop = new Map<string, AdminProductRow[]>();
 
   for (const product of products) {
-    const dropNumber = product.drop_number ?? 0;
-    const list = map.get(dropNumber) ?? [];
+    if (!product.drop_id) continue;
+    const list = productsByDrop.get(product.drop_id) ?? [];
     list.push(product);
-    map.set(dropNumber, list);
+    productsByDrop.set(product.drop_id, list);
   }
 
-  return Array.from(map.entries())
-    .sort(([a], [b]) => b - a)
-    .map(([dropNumber, dropProducts]) => {
-      const sorted = [...dropProducts].sort(
-        (a, b) =>
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-      );
-      const hero =
-        sorted.find((product) => product.is_active) ??
-        sorted.find((product) => product.featured) ??
-        sorted[0] ??
-        null;
-
-      return {
-        dropNumber,
-        title: `DROP ${String(dropNumber).padStart(2, "0")}`,
-        releaseDate: sorted[0]?.drop_date ?? "",
-        products: sorted,
-        heroProduct: hero,
-        isActive: sorted.some((product) => product.is_active),
-      };
+  return drops
+    .map((drop) => ({
+      drop: {
+        ...drop,
+        product_count: (productsByDrop.get(drop.id) ?? []).length,
+      },
+      products: (productsByDrop.get(drop.id) ?? []).sort((a, b) =>
+        a.name.localeCompare(b.name)
+      ),
+    }))
+    .sort((a, b) => {
+      const orderDiff = (b.drop.display_order ?? 0) - (a.drop.display_order ?? 0);
+      if (orderDiff !== 0) return orderDiff;
+      return b.drop.drop_number - a.drop.drop_number;
     });
 }

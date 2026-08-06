@@ -11,6 +11,8 @@ export const DEFAULT_STOCK_PER_SIZE = 30;
 /** Standard purchasable sizes for new drops (XS–XL). */
 export const STANDARD_DROP_SIZES = ["XS", "S", "M", "L", "XL"] as const;
 
+export type ProductStatus = "draft" | "published" | "archived";
+
 export type SizeChartRow = {
   size: string;
   chest: number;
@@ -43,29 +45,23 @@ export function buildDefaultSizeStock(
 
 export type Product = {
   id: string;
-  dropNumber: number;
+  dropId: string | null;
   name: string;
   description: string;
   details: string | null;
   price: number;
   images: string[];
   sizeStock: SizeStock[];
-  isActive: boolean;
+  status: ProductStatus;
   dropDate: string;
 };
 
 export type ProductRow = Tables<"products">;
 
-function inferDropNumber(id: string): number {
-  const match = id.match(/^drop-(\d+)$/);
-  if (!match) return 0;
-  return Number.parseInt(match[1], 10);
-}
-
 export function mapProductRow(row: ProductRow): Product {
   return {
     id: row.id,
-    dropNumber: row.drop_number ?? inferDropNumber(row.id),
+    dropId: row.drop_id ?? null,
     name: row.name,
     description: row.description,
     details: row.details ?? null,
@@ -74,13 +70,9 @@ export function mapProductRow(row: ProductRow): Product {
     sizeStock: Array.isArray(row.size_stock)
       ? (row.size_stock as SizeStock[])
       : [],
-    isActive: row.is_active,
+    status: (row.status ?? "draft") as ProductStatus,
     dropDate: row.drop_date,
   };
-}
-
-export function formatDropLabel(dropNumber: number): string {
-  return `Drop ${dropNumber}`;
 }
 
 /** Maps ProductDetails selector codes to size-chart row labels. */
@@ -103,12 +95,4 @@ export function isProductFullySoldOut(product: Product): boolean {
 
 export function getSizeStock(product: Product, size: string): number {
   return product.sizeStock.find((entry) => entry.size === size)?.stock ?? 0;
-}
-
-export function getActiveProduct(products: Product[]): Product | undefined {
-  return products.find((product) => product.isActive);
-}
-
-export function getPastProducts(products: Product[]): Product[] {
-  return products.filter((product) => !product.isActive);
 }

@@ -3,33 +3,34 @@
 import { useState, useTransition } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import type { DropGroup } from "@/lib/admin/types";
 import { formatAdminDate } from "@/lib/admin/format";
 import {
   activateDropAction,
-  archiveDropProductsAction,
+  archiveDropAction,
   deactivateDropAction,
+  deleteDropAction,
 } from "@/lib/admin/actions/drops";
 import { useAdminToast } from "@/components/admin/AdminProviders";
-import { useRouter } from "next/navigation";
 
 interface DropManagerProps {
-  drops: DropGroup[];
+  dropGroups: DropGroup[];
 }
 
-export function DropManager({ drops }: DropManagerProps) {
+export function DropManager({ dropGroups }: DropManagerProps) {
   const router = useRouter();
   const { toast } = useAdminToast();
   const [pending, startTransition] = useTransition();
 
-  const handleActivate = (productId: string) => {
+  const run = (action: () => Promise<{ success: boolean; error?: string }>, successMsg: string) => {
     startTransition(async () => {
-      const result = await activateDropAction(productId);
+      const result = await action();
       if (result.success) {
-        toast("Drop activated", "success");
+        toast(successMsg, "success");
         router.refresh();
       } else {
-        toast(result.error, "error");
+        toast(result.error ?? "Action failed", "error");
       }
     });
   };
@@ -37,100 +38,105 @@ export function DropManager({ drops }: DropManagerProps) {
   return (
     <div className="admin-drops">
       <div className="admin-toolbar">
-        <Link href="/admin/products/new" className="admin-btn admin-btn--primary">
-          Launch new drop
+        <Link href="/admin/drops/new" className="admin-btn admin-btn--primary">
+          Create drop
+        </Link>
+        <Link href="/admin/products/new" className="admin-btn admin-btn--ghost">
+          Add product
         </Link>
       </div>
 
       <p className="admin-muted">
-        Use <strong>Launch new drop</strong> to create a full product with images, stock, and
-        pricing. Publish with &ldquo;Active drop product&rdquo; checked to swap the live drop
-        automatically.
+        Drops are collections. Assign one or many products to each drop. Activating a drop
+        does not affect other drops.
       </p>
 
       <div className="admin-drop-grid">
-        {drops.map((drop) => {
-          const hero = drop.heroProduct;
-          const image =
-            hero?.primary_image || hero?.images?.[0] || "/product-placeholder.webp";
+        {dropGroups.map(({ drop, products }) => {
+          const image = drop.hero_image || products[0]?.primary_image || "/product-placeholder.webp";
 
           return (
-            <article key={drop.dropNumber} className="admin-drop-card">
+            <article key={drop.id} className="admin-drop-card">
               <div className="admin-drop-card__media">
                 <Image src={image} alt="" fill className="object-cover" sizes="400px" />
               </div>
               <div className="admin-drop-card__body">
                 <div className="admin-drop-card__head">
                   <div>
-                    <p className="admin-drop-card__kicker">{drop.title}</p>
-                    <h3>{hero?.name ?? "No hero product"}</h3>
+                    <p className="admin-drop-card__kicker">
+                      Drop {String(drop.drop_number).padStart(2, "0")}
+                    </p>
+                    <h3>{drop.name}</h3>
                   </div>
                   <span
-                    className={`admin-badge ${drop.isActive ? "admin-badge--accent" : ""}`}
+                    className={`admin-badge ${drop.is_active ? "admin-badge--accent" : ""}`}
                   >
-                    {drop.isActive ? "Active" : "Inactive"}
+                    {drop.is_active ? "Active" : drop.status}
                   </span>
                 </div>
                 <p className="admin-muted">
-                  Release · {drop.releaseDate ? formatAdminDate(drop.releaseDate) : "—"}
+                  Launch · {drop.launch_date ? formatAdminDate(drop.launch_date) : "—"}
                 </p>
-                <p className="admin-muted">{drop.products.length} product(s)</p>
+                <p className="admin-muted">
+                  {products.length} product{products.length === 1 ? "" : "s"}
+                </p>
                 <div className="admin-drop-card__actions">
-                  {hero ? (
-                    <>
-                      {!drop.isActive ? (
-                        <button
-                          type="button"
-                          className="admin-btn admin-btn--primary"
-                          disabled={pending}
-                          onClick={() => handleActivate(hero.id)}
-                        >
-                          Set active
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          className="admin-btn admin-btn--ghost"
-                          disabled={pending}
-                          onClick={() =>
-                            startTransition(async () => {
-                              const result = await deactivateDropAction(hero.id);
-                              if (result.success) {
-                                toast("Drop marked sold out / inactive", "success");
-                                router.refresh();
-                              } else {
-                                toast(result.error, "error");
-                              }
-                            })
-                          }
-                        >
-                          Mark sold out
-                        </button>
-                      )}
-                      <Link href={`/admin/products/${hero.id}`} className="admin-btn admin-btn--ghost">
-                        Edit hero
-                      </Link>
-                    </>
-                  ) : null}
+                  {!drop.is_active ? (
+                    <button
+                      type="button"
+                      className="admin-btn admin-btn--primary"
+                      disabled={pending}
+                      onClick={() =>
+                        run(() => activateDropAction(drop.id), "Drop activated")
+                      }
+                    >
+                      Activate
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="admin-btn admin-btn--ghost"
+                      disabled={pending}
+                      onClick={() =>
+                        run(() => deactivateDropAction(drop.id), "Drop deactivated")
+                      }
+                    >
+                      Deactivate
+                    </button>
+                  )}
+                  <Link href={`/admin/drops/${drop.id}`} className="admin-btn admin-btn--ghost">
+                    Edit drop
+                  </Link>
                   <button
                     type="button"
                     className="admin-btn admin-btn--ghost"
                     disabled={pending}
                     onClick={() =>
-                      startTransition(async () => {
-                        const result = await archiveDropProductsAction(drop.dropNumber);
-                        if (result.success) {
-                          toast("Drop archived", "success");
-                          router.refresh();
-                        } else {
-                          toast(result.error, "error");
-                        }
-                      })
+                      run(() => archiveDropAction(drop.id), "Drop archived")
                     }
                   >
-                    Archive drop
+                    Archive
+                  </button>
+                  <button
+                    type="button"
+                    className="admin-btn admin-btn--ghost"
+                    disabled={pending || products.length > 0}
+                    onClick={() =>
+                      run(() => deleteDropAction(drop.id), "Drop deleted")
+                    }
+                  >
+                    Delete
                   </button>
                 </div>
+                {products.length > 0 && (
+                  <ul className="admin-drop-products-list">
+                    {products.map((product) => (
+                      <li key={product.id}>
+                        <Link href={`/admin/products/${product.id}`}>{product.name}</Link>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
             </article>
           );

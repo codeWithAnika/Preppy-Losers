@@ -1,10 +1,16 @@
 import { DropManager } from "@/components/admin/DropManager";
-import { DropStockPanel } from "@/components/admin/InventoryEditor";
-import { fetchAdminProducts, groupProductsByDrop } from "@/lib/admin/queries";
+import {
+  buildDropGroups,
+  fetchAdminDrops,
+  fetchAdminProducts,
+} from "@/lib/admin/queries";
 
 export default async function AdminDropsPage() {
-  const products = await fetchAdminProducts();  const drops = groupProductsByDrop(products);
-  const activeProduct = products.find((product) => product.is_active) ?? null;
+  const [drops, products] = await Promise.all([
+    fetchAdminDrops(),
+    fetchAdminProducts(),
+  ]);
+  const dropGroups = buildDropGroups(drops, products);
 
   return (
     <div className="admin-page">
@@ -14,14 +20,7 @@ export default async function AdminDropsPage() {
           <h1>Drops</h1>
         </div>
       </div>
-      {activeProduct ? (
-        <DropStockPanel
-          productId={activeProduct.id}
-          productName={activeProduct.name}
-          sizeStock={activeProduct.size_stock ?? []}
-        />
-      ) : null}
-      <DropManager drops={drops} />
+      <DropManager dropGroups={dropGroups} />
     </div>
   );
 }
