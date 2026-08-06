@@ -73,8 +73,8 @@ Supabase Auth cookies use `SameSite=Lax` by default. Payment mutations go throug
 
 - [ ] Switch Razorpay from test to live keys
 - [ ] Set `RAZORPAY_WEBHOOK_SECRET` in Supabase secrets
-- [ ] Apply all pending SQL migrations
-- [ ] Verify admin allowlist UUIDs
+- [ ] Apply all pending SQL migrations (includes `admin_allowlist` table)
+- [ ] Grant admins via `select public.grant_admin('<uuid>');` in SQL editor
 - [ ] Confirm `FORCE_HTTPS=true` in production
 - [ ] Confirm `ALLOWED_ORIGINS` includes production domain only
 - [ ] Run `npm run build` clean

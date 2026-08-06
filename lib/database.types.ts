@@ -64,6 +64,29 @@ export type Database = {
           },
         ];
       };
+      admin_allowlist: {
+        Row: {
+          user_id: string;
+          created_at: string;
+        };
+        Insert: {
+          user_id: string;
+          created_at?: string;
+        };
+        Update: {
+          user_id?: string;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "admin_allowlist_user_id_fkey";
+            columns: ["user_id"];
+            isOneToOne: true;
+            referencedRelation: "users";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       customer_addresses: {
         Row: {
           id: string;
@@ -489,6 +512,12 @@ export type Database = {
         };
         Returns: Json;
       };
+      grant_admin: {
+        Args: {
+          p_user_id: string;
+        };
+        Returns: undefined;
+      };
       increment_promo_used_count: {
         Args: {
           p_code: string;
@@ -498,6 +527,16 @@ export type Database = {
       is_admin: {
         Args: Record<PropertyKey, never>;
         Returns: boolean;
+      };
+      is_allowlisted_admin: {
+        Args: Record<PropertyKey, never>;
+        Returns: boolean;
+      };
+      revoke_admin: {
+        Args: {
+          p_user_id: string;
+        };
+        Returns: undefined;
       };
     };
     Enums: {

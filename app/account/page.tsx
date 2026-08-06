@@ -14,7 +14,8 @@ import { SignOutButton } from "@/components/auth/SignOutButton";
 import { ProfileEditForm } from "@/components/account/ProfileEditForm";
 import { AddressManager } from "@/components/account/AddressManager";
 import { PageEntrance } from "@/components/layout/PageEntrance";
-import { isAdmin } from "@/lib/auth/admin-allowlist";
+import { isAdminAuthorized } from "@/lib/auth/admin-allowlist";
+import { checkIsAdmin } from "@/lib/auth/is-admin";
 
 export const metadata: Metadata = {
   title: "Account — Preppy Losers",
@@ -58,7 +59,7 @@ export default async function AccountPage({ searchParams }: AccountPageProps) {
   const recentOrders = orderGroups.slice(0, 3);
   const orderSuccess = searchParams?.order === "success";
   const adminDenied = searchParams?.admin_denied === "1";
-  const isAdminUser = isAdmin(user.id, profile?.role);
+  const isAdminUser = await checkIsAdmin(supabase, user.id, profile?.role);
 
   return (
     <div className="min-h-screen px-4 pb-20 pt-24 md:px-8">
@@ -83,7 +84,7 @@ export default async function AccountPage({ searchParams }: AccountPageProps) {
             role="status"
           >
             Admin access is restricted to approved accounts. You must be
-            signed in with an allowlisted user id and{" "}
+            on the admin allowlist and have{" "}
             <code className="text-xs">profiles.role = &apos;admin&apos;</code>{" "}
             set via the server.
           </p>

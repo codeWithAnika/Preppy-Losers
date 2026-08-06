@@ -5,16 +5,9 @@ import type { SupabaseClient, User } from "@supabase/supabase-js";
 import type { Profile } from "@/lib/profile";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/database.types";
-import {
-  isAdmin,
-  isAdminAllowlisted,
-} from "@/lib/auth/admin-allowlist";
+import { isAdminAuthorized } from "@/lib/auth/admin-allowlist";
 
-export {
-  ADMIN_USER_IDS,
-  isAdmin,
-  isAdminAllowlisted,
-} from "@/lib/auth/admin-allowlist";
+export { isAdminAuthorized, isAdminPath } from "@/lib/auth/admin-allowlist";
 
 export type AdminSession = {
   supabase: ReturnType<typeof createClient>;
@@ -36,19 +29,48 @@ function logAdminDev(message: string, payload: Record<string, unknown>): void {
   }
 }
 
+export async function isUserAllowlisted(
+  supabase: SupabaseClient<Database>,
+  userId: string
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from("admin_allowlist")
+    .select("user_id")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (error) {
+    console.error("[admin] Failed to read allowlist:", error.message, {
+      code: error.code,
+      userId,
+    });
+    return false;
+  }
+
+  return Boolean(data?.user_id);
+}
+
+export async function checkIsAdmin(
+  supabase: SupabaseClient<Database>,
+  userId: string,
+  profileRole: string | null | undefined
+): Promise<boolean> {
+  const allowlisted = await isUserAllowlisted(supabase, userId);
+  return isAdminAuthorized(profileRole, allowlisted);
+}
+
 export async function resolveAdminAuthorization(
   supabase: SupabaseClient<Database>,
   userId: string
 ): Promise<AdminAuthorization> {
-  const allowlisted = isAdminAllowlisted(userId);
+  const [allowlisted, profileResult] = await Promise.all([
+    isUserAllowlisted(supabase, userId),
+    supabase.from("profiles").select("id, role").eq("id", userId).maybeSingle(),
+  ]);
 
   logAdminDev("resolve authorization", { userId, allowlisted });
 
-  const { data: profile, error } = await supabase
-    .from("profiles")
-    .select("id, role")
-    .eq("id", userId)
-    .maybeSingle();
+  const { data: profile, error } = profileResult;
 
   if (error) {
     console.error("[admin] Failed to read profile role:", error.message, {
@@ -72,7 +94,7 @@ export async function resolveAdminAuthorization(
   }
 
   const role = profile.role?.trim() ?? null;
-  const authorized = isAdmin(userId, role);
+  const authorized = isAdminAuthorized(role, allowlisted);
 
   logAdminDev("authorization resolved", {
     userId,
@@ -102,11 +124,16 @@ export async function requireAdmin(
     redirect(`/login?next=${encodeURIComponent(nextPath)}`);
   }
 
-  const { data: profile, error } = await supabase
-    .from("profiles")
-    .select("id, full_name, phone, role, created_at")
-    .eq("id", user.id)
-    .maybeSingle();
+  const [allowlisted, profileResult] = await Promise.all([
+    isUserAllowlisted(supabase, user.id),
+    supabase
+      .from("profiles")
+      .select("id, full_name, phone, role, created_at")
+      .eq("id", user.id)
+      .maybeSingle(),
+  ]);
+
+  const { data: profile, error } = profileResult;
 
   if (error) {
     console.error("[admin] Failed to read profile:", error.message, {
@@ -115,10 +142,10 @@ export async function requireAdmin(
     });
   }
 
-  if (!profile || !isAdmin(user.id, profile.role)) {
+  if (!profile || !isAdminAuthorized(profile.role, allowlisted)) {
     logAdminDev("requireAdmin denied", {
       userId: user.id,
-      allowlisted: isAdminAllowlisted(user.id),
+      allowlisted,
       role: profile?.role ?? null,
       profileFound: Boolean(profile),
     });

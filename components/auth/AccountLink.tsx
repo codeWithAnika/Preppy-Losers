@@ -9,7 +9,7 @@ import {
   buildAuthPageHref,
   buildReturnToFromLocation,
 } from "@/lib/auth/post-auth-redirect";
-import { isAdmin } from "@/lib/auth/admin-allowlist";
+import { isAdminAuthorized } from "@/lib/auth/admin-allowlist";
 
 interface AccountLinkProps {
   size?: number;
@@ -39,13 +39,24 @@ export function AccountLink({ size = 20, className = "" }: AccountLinkProps) {
         return;
       }
 
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("id, role")
-        .eq("id", user.id)
-        .maybeSingle();
+      const [{ data: profile }, { data: allowlist }] = await Promise.all([
+        supabase
+          .from("profiles")
+          .select("id, role")
+          .eq("id", user.id)
+          .maybeSingle(),
+        supabase
+          .from("admin_allowlist")
+          .select("user_id")
+          .eq("user_id", user.id)
+          .maybeSingle(),
+      ]);
 
-      setHref(isAdmin(user.id, profile?.role) ? "/admin/dashboard" : "/account");
+      setHref(
+        isAdminAuthorized(profile?.role, Boolean(allowlist?.user_id))
+          ? "/admin/dashboard"
+          : "/account"
+      );
     };
 
     syncHref();

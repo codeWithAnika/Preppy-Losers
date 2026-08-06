@@ -7,11 +7,8 @@ import {
 
 export type AdminRoleCheck = AdminAuthorization;
 
-export {
-  isAdmin,
-  isAdminAllowlisted,
-  isAdminPath,
-} from "@/lib/auth/admin-allowlist";
+export { isAdminAuthorized, isAdminPath } from "@/lib/auth/admin-allowlist";
+export { isUserAllowlisted, checkIsAdmin } from "@/lib/auth/is-admin";
 
 /** Read allowlist + profiles.role for the signed-in user (server-only). */
 export async function readAdminRoleCheck(
