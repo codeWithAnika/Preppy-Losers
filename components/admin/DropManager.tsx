@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { DropGroup } from "@/lib/admin/types";
+import { formatSizeStockSummary } from "@/lib/admin/product-utils";
 import { formatAdminDate } from "@/lib/admin/format";
 import {
   activateDropAction,
@@ -133,6 +134,9 @@ export function DropManager({ dropGroups }: DropManagerProps) {
                     {products.map((product) => (
                       <li key={product.id}>
                         <Link href={`/admin/products/${product.id}`}>{product.name}</Link>
+                        <span className="admin-muted">
+                          {formatSizeStockSummary(product)}
+                        </span>
                       </li>
                     ))}
                   </ul>

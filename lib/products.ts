@@ -43,6 +43,34 @@ export function buildDefaultSizeStock(
   return sizes.map((size) => ({ size, stock: DEFAULT_STOCK_PER_SIZE }));
 }
 
+/** Normalize Supabase jsonb size_stock into a typed array. */
+export function parseSizeStock(value: unknown): SizeStock[] {
+  if (!value) return [];
+
+  if (typeof value === "string") {
+    try {
+      return parseSizeStock(JSON.parse(value));
+    } catch {
+      return [];
+    }
+  }
+
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .filter(
+      (entry): entry is SizeStock =>
+        Boolean(entry) &&
+        typeof entry === "object" &&
+        typeof (entry as SizeStock).size === "string" &&
+        typeof (entry as SizeStock).stock === "number"
+    )
+    .map((entry) => ({
+      size: entry.size,
+      stock: entry.stock,
+    }));
+}
+
 export type Product = {
   id: string;
   dropId: string | null;
@@ -67,9 +95,7 @@ export function mapProductRow(row: ProductRow): Product {
     details: row.details ?? null,
     price: row.price,
     images: Array.isArray(row.images) ? (row.images as string[]) : [],
-    sizeStock: Array.isArray(row.size_stock)
-      ? (row.size_stock as SizeStock[])
-      : [],
+    sizeStock: parseSizeStock(row.size_stock),
     status: (row.status ?? "draft") as ProductStatus,
     dropDate: row.drop_date,
   };

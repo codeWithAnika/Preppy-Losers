@@ -13,11 +13,17 @@ import type {
   StoreSettings,
 } from "@/lib/admin/types";
 import { DEFAULT_STORE_SETTINGS } from "@/lib/admin/types";
-import { isOutOfStock } from "@/lib/admin/product-utils";
+import { isOutOfStock, mapAdminProductRow } from "@/lib/admin/product-utils";
 import { mapDropRow } from "@/lib/drops";
 import { isDropListed } from "@/lib/purchasability";
 
-export { buildDropGroups, inventoryTotal, isOutOfStock } from "@/lib/admin/product-utils";
+export {
+  buildDropGroups,
+  formatSizeStockSummary,
+  inventoryTotal,
+  isOutOfStock,
+  mapAdminProductRow,
+} from "@/lib/admin/product-utils";
 
 export async function fetchAdminDrops(): Promise<AdminDropRow[]> {
   const supabase = createClient();
@@ -50,7 +56,7 @@ export async function fetchAdminProducts(): Promise<AdminProductRow[]> {
     .order("created_at", { ascending: false });
 
   if (error) throw new Error(error.message);
-  return (data ?? []) as unknown as AdminProductRow[];
+  return (data ?? []).map(mapAdminProductRow);
 }
 
 export async function fetchAdminProduct(id: string): Promise<AdminProductRow | null> {
@@ -62,7 +68,7 @@ export async function fetchAdminProduct(id: string): Promise<AdminProductRow | n
     .maybeSingle();
 
   if (error) throw new Error(error.message);
-  return data as unknown as AdminProductRow | null;
+  return data ? mapAdminProductRow(data) : null;
 }
 
 export async function fetchAdminOrders(): Promise<AdminOrderRow[]> {

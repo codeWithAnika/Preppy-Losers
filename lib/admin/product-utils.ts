@@ -1,7 +1,24 @@
-import type { AdminDropRow, AdminProductRow, DropGroup } from "@/lib/admin/types";
+import type { Tables } from "@/lib/database.types";
+import type { AdminDropRow, AdminProductRow, DropGroup, ProductStatus } from "@/lib/admin/types";
+import { parseSizeStock } from "@/lib/products";
+
+export function mapAdminProductRow(row: Tables<"products">): AdminProductRow {
+  return {
+    ...row,
+    size_stock: parseSizeStock(row.size_stock),
+    images: Array.isArray(row.images) ? (row.images as string[]) : [],
+    status: (row.status ?? "draft") as ProductStatus,
+  };
+}
 
 function totalStock(product: AdminProductRow): number {
   return (product.size_stock ?? []).reduce((sum, entry) => sum + entry.stock, 0);
+}
+
+export function formatSizeStockSummary(product: AdminProductRow): string {
+  const stock = product.size_stock ?? [];
+  if (stock.length === 0) return "No sizes";
+  return stock.map((entry) => `${entry.size} (${entry.stock})`).join(" · ");
 }
 
 export function isOutOfStock(product: AdminProductRow): boolean {

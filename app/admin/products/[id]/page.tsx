@@ -21,7 +21,7 @@ export default async function EditProductPage({ params }: EditProductPageProps) 
           <h1>{product.name}</h1>
         </div>
       </div>
-      <ProductEditor product={product} drops={drops} />
+      <ProductEditor key={product.id} product={product} drops={drops} />
     </div>
   );
 }
